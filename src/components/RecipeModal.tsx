@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Recipe, CategoryType, Ingredient } from '../types';
+import { Recipe, CategoryType, DishCourse, Ingredient } from '../types';
 import { saveRecipe, deleteRecipe } from '../lib/dataService';
-import { ChefHat, Plus, Trash2, Clock, Users, Save, X, Sparkles, CheckCircle2 } from 'lucide-react';
+import { getSeasonalDataForMonth, inferCourseFromRecipe } from '../data/seasonalData';
+import { ChefHat, Plus, Trash2, Clock, Users, Save, X, Sparkles, CheckCircle2, Leaf } from 'lucide-react';
 
 interface RecipeModalProps {
   recipe?: Recipe | null;
@@ -13,6 +14,7 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
 
   const [name, setName] = useState('');
   const [category, setCategory] = useState<CategoryType>('Sabina');
+  const [course, setCourse] = useState<DishCourse>('Primi');
   const [prepTime, setPrepTime] = useState<number>(20);
   const [servings, setServings] = useState<number>(4);
   const [instructions, setInstructions] = useState('');
@@ -29,10 +31,13 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
   const [autoFillError, setAutoFillError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'view' | 'edit'>(isEditing ? 'view' : 'edit');
 
+  const currentMonthData = getSeasonalDataForMonth();
+
   useEffect(() => {
     if (recipe) {
       setName(recipe.name);
       setCategory(recipe.category);
+      setCourse(recipe.course || inferCourseFromRecipe(recipe.name, recipe.category));
       setPrepTime(recipe.prepTimeMinutes || 20);
       setServings(recipe.servings || 4);
       setInstructions(recipe.instructions || '');
@@ -73,6 +78,11 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
         if (data.category && ['Sabina', 'Lazio', 'Classica', 'Altro'].includes(data.category)) {
           setCategory(data.category as CategoryType);
         }
+        if (data.course && ['Antipasti', 'Primi', 'Secondi', 'Contorni', 'Dolci'].includes(data.course)) {
+          setCourse(data.course as DishCourse);
+        } else {
+          setCourse(inferCourseFromRecipe(targetTitle, data.category));
+        }
         if (data.prepTimeMinutes) setPrepTime(Number(data.prepTimeMinutes));
         if (data.servings) setServings(Number(data.servings));
         if (data.calories !== undefined) setCalories(Number(data.calories));
@@ -89,7 +99,7 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
             }))
           );
         }
-        setAutoFillSuccess(`Dati, ingredienti e valori nutrizionali compilati automaticamente per "${targetTitle}"!`);
+        setAutoFillSuccess(`Dati, portata (${data.course || 'auto-rilevata'}), ingredienti e valori nutrizionali compilati per "${targetTitle}"!`);
       }
     } catch (err: any) {
       console.error('Errore AutoFill:', err);
@@ -101,6 +111,17 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
 
   const handleAddIngredientRow = () => {
     setIngredients([...ingredients, { name: '', quantity: '100', unit: 'g' }]);
+  };
+
+  const handleAddSeasonalIngredient = (item: { name: string }) => {
+    // If the last ingredient is empty, replace it, otherwise append
+    const cleanName = item.name.replace(/\s*\(.*\)/, '');
+    const lastIng = ingredients[ingredients.length - 1];
+    if (ingredients.length === 1 && !lastIng.name.trim()) {
+      setIngredients([{ name: cleanName, quantity: '200', unit: 'g' }]);
+    } else {
+      setIngredients([...ingredients, { name: cleanName, quantity: '200', unit: 'g' }]);
+    }
   };
 
   const handleRemoveIngredientRow = (index: number) => {
@@ -125,6 +146,7 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
       id: recipe?.id || `recipe-${Date.now()}`,
       name: name.trim(),
       category,
+      course,
       prepTimeMinutes: Number(prepTime) || 20,
       servings: Number(servings) || 4,
       nutrition: {
@@ -150,6 +172,7 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
   };
 
   const categories: CategoryType[] = ['Sabina', 'Lazio', 'Classica', 'Altro'];
+  const courses: DishCourse[] = ['Antipasti', 'Primi', 'Secondi', 'Contorni', 'Dolci'];
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-[10px] animate-fade-in overflow-y-auto">
@@ -165,7 +188,7 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
                 {viewMode === 'view' ? recipe?.name : isEditing ? 'Modifica Ricetta' : 'Nuova Ricetta'}
               </h3>
               <p className="text-xs text-slate-300">
-                {viewMode === 'view' ? `Categoria: ${recipe?.category}` : 'Compila i dettagli del piatto'}
+                {viewMode === 'view' ? `Portata: ${recipe?.course || 'Primo'} | Categoria: ${recipe?.category}` : 'Compila i dettagli e la portata del piatto'}
               </p>
             </div>
           </div>
@@ -192,6 +215,9 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
         {viewMode === 'view' && recipe ? (
           <div className="p-[10px] overflow-y-auto space-y-[10px]">
             <div className="flex items-center gap-[5px] flex-wrap p-[5px]">
+              <span className="p-[5px] px-[10px] rounded-full text-xs font-black bg-[#191970] text-white">
+                {recipe.course || inferCourseFromRecipe(recipe.name, recipe.category)}
+              </span>
               <span className="p-[5px] px-[10px] rounded-full text-xs font-bold bg-[#f37021]/10 text-[#f37021] border border-[#f37021]/30">
                 {recipe.category}
               </span>
@@ -269,7 +295,7 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
             {isAutoFilling && (
               <div className="bg-amber-50 border border-amber-200 p-[8px] rounded-md flex items-center gap-[8px] text-xs font-bold text-amber-900 animate-pulse">
                 <Sparkles className="w-4 h-4 text-[#f37021] animate-spin" />
-                <span>Compilazione automatica della ricetta, ingredienti e valori nutrizionali in corso con l'IA...</span>
+                <span>Compilazione automatica della ricetta, portata e valori nutrizionali in corso con l'IA...</span>
               </div>
             )}
             {autoFillSuccess && (
@@ -292,6 +318,34 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
               </div>
             )}
 
+            {/* Dish Course Selector (Antipasti, Primi, Secondi, Contorni, Dolci) */}
+            <div className="p-[5px] bg-slate-50 border border-slate-200 rounded-md space-y-[4px]">
+              <label className="text-[11px] font-black text-[#191970] uppercase tracking-wider block">
+                Portata del Piatto *
+              </label>
+              <div className="flex items-center gap-[4px] flex-wrap">
+                {courses.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => setCourse(c)}
+                    className={`p-[5px] px-[10px] rounded-md text-xs font-extrabold transition-all ${
+                      course === c
+                        ? 'bg-[#191970] text-white shadow-xs'
+                        : 'bg-white text-slate-700 border border-slate-300 hover:border-[#f37021]'
+                    }`}
+                  >
+                    {c === 'Antipasti' && '🥗 '}
+                    {c === 'Primi' && '🍝 '}
+                    {c === 'Secondi' && '🥩 '}
+                    {c === 'Contorni' && '🥬 '}
+                    {c === 'Dolci' && '🍰 '}
+                    {c}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-[10px]">
               <div className="p-[5px] space-y-[5px]">
                 <div className="flex items-center justify-between">
@@ -303,7 +357,7 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
                     onClick={() => handleAutoFillRecipe()}
                     disabled={isAutoFilling || !name.trim()}
                     className="text-[10px] font-extrabold text-white bg-gradient-to-r from-[#f37021] to-amber-600 hover:from-[#d95d13] hover:to-amber-700 p-[2px] px-[8px] rounded-md shadow-xs transition-all flex items-center gap-[3px] disabled:opacity-50"
-                    title="Compila automaticamente ingredienti e valori nutrizionali con l'IA"
+                    title="Compila automaticamente la ricetta con l'IA"
                   >
                     <Sparkles className="w-3 h-3" />
                     <span>{isAutoFilling ? 'Compilazione...' : 'Auto-Compila'}</span>
@@ -313,10 +367,12 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
                 <div className="flex items-center gap-[5px]">
                   <input
                     type="text"
-                    placeholder="es. Carbonara, Fregnacce alla Sabina, Cacio e Pepe..."
+                    placeholder="es. Bruschetta, Carbonara, Pollo con peperoni..."
                     value={name}
                     onChange={(e) => {
-                      setName(e.target.value);
+                      const newName = e.target.value;
+                      setName(newName);
+                      setCourse(inferCourseFromRecipe(newName, category));
                       if (autoFillSuccess) setAutoFillSuccess(null);
                     }}
                     onKeyDown={(e) => {
@@ -338,14 +394,11 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
                     <span>{isAutoFilling ? 'IA...' : 'Auto-compila'}</span>
                   </button>
                 </div>
-                <p className="text-[10px] text-slate-500 italic">
-                  Scrivi il titolo e premi "Auto-compila" per riempire automaticamente ingredienti, quantità e valori nutrizionali!
-                </p>
               </div>
 
               <div className="p-[5px] space-y-[5px]">
                 <label className="text-xs font-bold text-slate-700 block">
-                  Tradizione / Categoria
+                  Tradizione Culinaria
                 </label>
                 <select
                   value={category}
@@ -385,9 +438,34 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
               </div>
             </div>
 
+            {/* Seasonal Produce Suggestion Box for adding ingredients */}
+            <div className="bg-emerald-50/90 border border-emerald-300 p-[8px] rounded-lg space-y-[4px]">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-black text-emerald-900 flex items-center gap-[4px]">
+                  <Leaf className="w-3.5 h-3.5 text-emerald-600" />
+                  Alimenti Consigliati per la Stagione ({currentMonthData.monthName})
+                </span>
+                <span className="text-[10px] text-emerald-700 font-bold">Clicca per aggiungere agli ingredienti!</span>
+              </div>
+              <div className="flex items-center gap-[4px] flex-wrap pt-[2px]">
+                {currentMonthData.items.map((item, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => handleAddSeasonalIngredient(item)}
+                    title={`${item.description} - ${item.benefits}`}
+                    className="text-[10px] font-bold bg-white text-emerald-900 border border-emerald-200 hover:border-emerald-500 p-[3px] px-[7px] rounded-full shadow-2xs hover:bg-emerald-100 transition-all flex items-center gap-[3px]"
+                  >
+                    <span>{item.icon}</span>
+                    <span>{item.name}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {/* Nutrition Inputs Section */}
-            <div className="bg-emerald-50/80 p-[10px] rounded-lg border border-emerald-200 space-y-[8px]">
-              <label className="text-[11px] font-extrabold uppercase tracking-wider text-emerald-900 block p-[2px]">
+            <div className="bg-slate-50 p-[10px] rounded-lg border border-slate-200 space-y-[8px]">
+              <label className="text-[11px] font-extrabold uppercase tracking-wider text-[#191970] block p-[2px]">
                 Valori Nutrizionali (per porzione)
               </label>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-[8px]">
@@ -502,7 +580,7 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
                 placeholder="Passaggi della ricetta..."
                 value={instructions}
                 onChange={(e) => setInstructions(e.target.value)}
-                className="w-full p-[10px] bg-white text-slate-900 placeholder-slate-400 border border-slate-300 rounded-md text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#f37021]"
+                className="w-full p-[10px] bg-white text-[#191970] placeholder-slate-400 border border-slate-300 rounded-md text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#f37021]"
               />
             </div>
 

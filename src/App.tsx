@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { UserRole, Recipe, WeeklyMenuItem, ShoppingListItem, PantryItem } from './types';
+import { Recipe, WeeklyMenuItem, ShoppingListItem, PantryItem } from './types';
 import {
   seedInitialData,
   subscribeToRecipes,
@@ -16,17 +16,17 @@ import {
   ActiveUserSession
 } from './lib/familyAuthService';
 import { LoginView } from './components/LoginView';
-import { Header } from './components/Header';
+import { Header, MainNavTab } from './components/Header';
 import { PlannerView } from './components/PlannerView';
-import { ChefView } from './components/ChefView';
 import { ShopperView } from './components/ShopperView';
 import { PantryView } from './components/PantryView';
 import { RecipeModal } from './components/RecipeModal';
 import { FamilyAdminModal } from './components/FamilyAdminModal';
+import { SettingsModal } from './components/SettingsModal';
 import { BottomMainbar } from './components/BottomMainbar';
 
 export default function App() {
-  const [currentRole, setCurrentRole] = useState<UserRole>('planner');
+  const [activeTab, setActiveTab] = useState<MainNavTab>('calendar');
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [weeklyMenu, setWeeklyMenu] = useState<WeeklyMenuItem[]>([]);
   const [shoppingList, setShoppingList] = useState<ShoppingListItem[]>([]);
@@ -38,8 +38,9 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [activeSession, setActiveSession] = useState<ActiveUserSession | null>(() => getSavedUserSession());
 
-  // Modal Famiglia
+  // Modals state
   const [isFamilyModalOpen, setIsFamilyModalOpen] = useState(false);
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
 
   // Monitor Firebase Auth state change across reloads
   useEffect(() => {
@@ -123,11 +124,12 @@ export default function App() {
     <div className="min-h-screen bg-[#191970] text-slate-100 pb-20">
       {/* Sticky Top Header */}
       <Header
-        currentRole={currentRole}
-        onSelectRole={setCurrentRole}
+        activeTab={activeTab}
+        onSelectTab={setActiveTab}
         currentUser={currentUser}
         activeSession={activeSession}
         onOpenFamilyModal={() => setIsFamilyModalOpen(true)}
+        onOpenSettingsModal={() => setIsSettingsModalOpen(true)}
         onLogout={handleLogout}
       />
 
@@ -144,36 +146,49 @@ export default function App() {
         ) : (
           /* Dynamic Active View */
           <div>
-            {currentRole === 'planner' && (
+            {activeTab === 'recipes' && (
               <PlannerView
+                initialSubTab="recipeBook"
                 recipes={recipes}
                 weeklyMenu={weeklyMenu}
-                onNavigateToShopper={() => setCurrentRole('shopper')}
+                onNavigateToShopper={() => setActiveTab('shopper')}
                 onOpenRecipeModal={(recipe) => setActiveModalRecipe(recipe ?? null)}
               />
             )}
 
-            {currentRole === 'chef' && (
-              <ChefView
+            {activeTab === 'calendar' && (
+              <PlannerView
+                initialSubTab="calendar"
                 recipes={recipes}
                 weeklyMenu={weeklyMenu}
-                onOpenRecipeModal={(recipe) => setActiveModalRecipe(recipe)}
+                onNavigateToShopper={() => setActiveTab('shopper')}
+                onOpenRecipeModal={(recipe) => setActiveModalRecipe(recipe ?? null)}
               />
             )}
 
-            {currentRole === 'shopper' && (
+            {activeTab === 'pantry' && (
+              <PantryView
+                pantryItems={pantryItems}
+                onNavigateToShopper={() => setActiveTab('shopper')}
+              />
+            )}
+
+            {activeTab === 'stats' && (
+              <PlannerView
+                initialSubTab="nutrition"
+                recipes={recipes}
+                weeklyMenu={weeklyMenu}
+                onNavigateToShopper={() => setActiveTab('shopper')}
+                onOpenRecipeModal={(recipe) => setActiveModalRecipe(recipe ?? null)}
+              />
+            )}
+
+            {activeTab === 'shopper' && (
               <ShopperView
                 shoppingList={shoppingList}
                 pantryItems={pantryItems}
-                onNavigateToPlanner={() => setCurrentRole('planner')}
-                onNavigateToPantry={() => setCurrentRole('pantry')}
-              />
-            )}
-
-            {currentRole === 'pantry' && (
-              <PantryView
-                pantryItems={pantryItems}
-                onNavigateToShopper={() => setCurrentRole('shopper')}
+                onNavigateToPlanner={() => setActiveTab('calendar')}
+                onNavigateToPantry={() => setActiveTab('pantry')}
               />
             )}
           </div>
@@ -182,9 +197,11 @@ export default function App() {
 
       {/* Mobile Bottom Navigation Bar */}
       <BottomMainbar
-        currentRole={currentRole}
-        onSelectRole={setCurrentRole}
-        shoppingCount={shoppingList.filter((item) => !item.isChecked).length}
+        activeTab={activeTab}
+        onSelectTab={setActiveTab}
+        onOpenFamilyModal={() => setIsFamilyModalOpen(true)}
+        onOpenSettingsModal={() => setIsSettingsModalOpen(true)}
+        onLogout={handleLogout}
       />
 
       {/* Recipe View / Edit / Create Modal */}
@@ -203,8 +220,13 @@ export default function App() {
           onUserChanged={(user) => setCurrentUser(user)}
         />
       )}
+
+      {/* App Settings Modal */}
+      {isSettingsModalOpen && (
+        <SettingsModal
+          onClose={() => setIsSettingsModalOpen(false)}
+        />
+      )}
     </div>
   );
 }
-
-

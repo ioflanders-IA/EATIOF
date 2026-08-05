@@ -18,8 +18,33 @@ const STORAGE_KEYS = {
   WEEKLY_MENU: 'eatiof_weekly_menu_v1',
   SHOPPING_LIST: 'eatiof_shopping_list_v1',
   PANTRY: 'eatiof_pantry_v1',
-  SEEDED: 'eatiof_seeded_v2'
+  SEEDED: 'eatiof_seeded_v2',
+  DELETED_RECIPES: 'eatiof_deleted_recipes_v1'
 };
+
+function getDeletedRecipeIds(): string[] {
+  const data = localStorage.getItem(STORAGE_KEYS.DELETED_RECIPES);
+  if (data) {
+    try {
+      return JSON.parse(data);
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
+function addDeletedRecipeId(id: string) {
+  const ids = new Set(getDeletedRecipeIds());
+  ids.add(id);
+  localStorage.setItem(STORAGE_KEYS.DELETED_RECIPES, JSON.stringify(Array.from(ids)));
+}
+
+function removeDeletedRecipeId(id: string) {
+  const ids = new Set(getDeletedRecipeIds());
+  ids.delete(id);
+  localStorage.setItem(STORAGE_KEYS.DELETED_RECIPES, JSON.stringify(Array.from(ids)));
+}
 
 // Custom event to broadcast changes across components in local mode
 const LOCAL_SYNC_EVENT = 'eatiof_local_data_changed';
@@ -117,12 +142,20 @@ export function subscribeToRecipes(callback: (recipes: Recipe[]) => void): () =>
   const emitMerged = (firestoreRecipes: Recipe[] = lastFirestoreRecipes) => {
     lastFirestoreRecipes = firestoreRecipes;
     const map = new Map<string, Recipe>();
-    // 1. Initial recipes
-    INITIAL_RECIPES.forEach((r) => map.set(r.id, r));
-    // 2. Local recipes
-    getLocalRecipes().forEach((r) => map.set(r.id, r));
-    // 3. Firestore recipes (overrides local/initial if present)
-    firestoreRecipes.forEach((r) => map.set(r.id, r));
+    const deletedIds = new Set(getDeletedRecipeIds());
+
+    // 1. Initial recipes (if not deleted)
+    INITIAL_RECIPES.forEach((r) => {
+      if (!deletedIds.has(r.id)) map.set(r.id, r);
+    });
+    // 2. Local recipes (if not deleted)
+    getLocalRecipes().forEach((r) => {
+      if (!deletedIds.has(r.id)) map.set(r.id, r);
+    });
+    // 3. Firestore recipes (if not deleted)
+    firestoreRecipes.forEach((r) => {
+      if (!deletedIds.has(r.id)) map.set(r.id, r);
+    });
 
     const merged = Array.from(map.values());
     localStorage.setItem(STORAGE_KEYS.RECIPES, JSON.stringify(merged));
@@ -349,14 +382,12 @@ export async function saveRecipe(recipe: Recipe): Promise<void> {
   const recipeId = recipe.id || `recipe-${Date.now()}`;
   const recipeToSave = { ...recipe, id: recipeId };
 
+  // Remove from deleted tracking if re-saving/editing
+  removeDeletedRecipeId(recipeId);
+
   // Always update LocalStorage first for instant local persistence
-  const recipes = getLocalRecipes();
-  const idx = recipes.findIndex((r) => r.id === recipeId);
-  if (idx >= 0) {
-    recipes[idx] = recipeToSave;
-  } else {
-    recipes.push(recipeToSave);
-  }
+  const recipes = getLocalRecipes().filter((r) => r.id !== recipeId);
+  recipes.push(recipeToSave);
   localStorage.setItem(STORAGE_KEYS.RECIPES, JSON.stringify(recipes));
   notifyLocalChange();
 
@@ -366,6 +397,9 @@ export async function saveRecipe(recipe: Recipe): Promise<void> {
 }
 
 export async function deleteRecipe(recipeId: string): Promise<void> {
+  // Permanently track this recipe ID as deleted so default/initial data doesn't resurrect it
+  addDeletedRecipeId(recipeId);
+
   const recipes = getLocalRecipes().filter((r) => r.id !== recipeId);
   localStorage.setItem(STORAGE_KEYS.RECIPES, JSON.stringify(recipes));
   notifyLocalChange();

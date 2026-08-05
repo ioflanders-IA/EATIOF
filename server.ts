@@ -41,17 +41,18 @@ L'utente vuole aggiungere la ricetta intitolata: "${title.trim()}".
 
 Compila in modo realistico, accurato ed esaustivo la scheda tecnica della ricetta per 4 persone:
 1. category: 'Sabina', 'Lazio', 'Classica', oppure 'Altro'.
-2. prepTimeMinutes: minuti totali di preparazione (numero intero, es. 25).
-3. servings: numero di porzioni (default 4).
-4. calories: stima chilocalorie per singola porzione (kcal, numero intero, es. 480).
-5. protein: stima proteine per porzione in grammi (numero intero, es. 22).
-6. fat: stima grassi per porzione in grammi (numero intero, es. 20).
-7. carbs: stima carboidrati per porzione in grammi (numero intero, es. 55).
-8. ingredients: lista di tutti gli ingredienti necessari per 4 porzioni. Per ciascuno specifica:
+2. course: la tipologia di portata corretta tra esattamente una di queste 5 opzioni: 'Antipasti', 'Primi', 'Secondi', 'Contorni', 'Dolci'.
+3. prepTimeMinutes: minuti totali di preparazione (numero intero, es. 25).
+4. servings: numero di porzioni (default 4).
+5. calories: stima chilocalorie per singola porzione (kcal, numero intero, es. 480).
+6. protein: stima proteine per porzione in grammi (numero intero, es. 22).
+7. fat: stima grassi per porzione in grammi (numero intero, es. 20).
+8. carbs: stima carboidrati per porzione in grammi (numero intero, es. 55).
+9. ingredients: lista di tutti gli ingredienti necessari per 4 porzioni. Per ciascuno specifica:
    - name: nome preciso dell'ingrediente in italiano
    - quantity: quantità (es. "150", "400", "2", "q.b.")
    - unit: unità di misura ("g", "ml", "spicchi", "cucchiai", "pz", "fette", "")
-9. instructions: procedimento dettagliato passo-passo in italiano.`;
+10. instructions: procedimento dettagliato passo-passo in italiano.`;
 
     const response = await ai.models.generateContent({
       model: 'gemini-3.6-flash',
@@ -63,7 +64,11 @@ Compila in modo realistico, accurato ed esaustivo la scheda tecnica della ricett
           properties: {
             category: {
               type: Type.STRING,
-              description: 'Categoria della ricetta: Sabina, Lazio, Classica, Altro'
+              description: 'Tradizione culinaria: Sabina, Lazio, Classica, Altro'
+            },
+            course: {
+              type: Type.STRING,
+              description: 'Portata del piatto: Antipasti, Primi, Secondi, Contorni, Dolci'
             },
             prepTimeMinutes: {
               type: Type.INTEGER,
@@ -108,6 +113,7 @@ Compila in modo realistico, accurato ed esaustivo la scheda tecnica della ricett
           },
           required: [
             'category',
+            'course',
             'prepTimeMinutes',
             'servings',
             'calories',

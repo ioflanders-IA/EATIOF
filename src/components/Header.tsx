@@ -1,41 +1,32 @@
-import React from 'react';
-import { UserRole } from '../types';
-import { USER_PROFILES } from '../data/initialData';
-import { Database, Calendar, ChefHat, ShoppingBag, Refrigerator, ShieldCheck, LogOut, User as UserIcon } from 'lucide-react';
-import { isFirebaseConfigured } from '../lib/firebaseConfig';
+import React, { useState, useRef, useEffect } from 'react';
+import { BookOpen, Calendar, Refrigerator, Menu, Settings, Users, BarChart3, LogOut, User as UserIcon } from 'lucide-react';
 import { EatiofLogo } from './EatiofLogo';
 import { User } from 'firebase/auth';
 import { ActiveUserSession } from '../lib/familyAuthService';
 
+export type MainNavTab = 'recipes' | 'calendar' | 'pantry' | 'stats' | 'shopper';
+
 interface HeaderProps {
-  currentRole: UserRole;
-  onSelectRole: (role: UserRole) => void;
+  activeTab: MainNavTab;
+  onSelectTab: (tab: MainNavTab) => void;
   currentUser?: User | null;
   activeSession?: ActiveUserSession | null;
   onOpenFamilyModal?: () => void;
+  onOpenSettingsModal?: () => void;
   onLogout?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
-  currentRole,
-  onSelectRole,
+  activeTab,
+  onSelectTab,
   currentUser,
   activeSession,
   onOpenFamilyModal,
+  onOpenSettingsModal,
   onLogout
 }) => {
-  const getProfileIcon = (id: UserRole) => {
-    switch (id) {
-      case 'planner':
-        return <Calendar className="w-4 h-4 text-[#f37021]" />;
-      case 'chef':
-        return <ChefHat className="w-4 h-4 text-white" />;
-      case 'shopper':
-        return <ShoppingBag className="w-4 h-4 text-[#f37021]" />;
-      case 'pantry':
-        return <Refrigerator className="w-4 h-4 text-[#10b981]" />;
-    }
-  };
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const displayName =
     activeSession?.displayName ||
@@ -44,10 +35,21 @@ export const Header: React.FC<HeaderProps> = ({
     currentUser?.email?.split('@')[0] ||
     'Utente Famiglia';
 
+  // Close dropdown on outside click
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setIsMenuOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   return (
     <header className="sticky top-0 z-40 bg-[#191970] text-white border-b border-[#191970]/80 shadow-lg">
       <div className="max-w-4xl mx-auto p-[10px]">
-        {/* Top Brand Bar */}
+        {/* Top Brand & User Bar */}
         <div className="flex items-center justify-between mb-[8px] gap-2">
           <div className="flex items-center gap-[10px]">
             <EatiofLogo className="h-9 sm:h-11 w-auto" whiteTextColor={true} />
@@ -55,83 +57,148 @@ export const Header: React.FC<HeaderProps> = ({
 
           <div className="flex items-center gap-[6px]">
             {/* Active User Badge */}
-            <div className="flex items-center gap-1.5 bg-[#0d0d40] border border-amber-500/30 rounded-xl px-2.5 py-1 text-xs">
+            <div className="flex items-center gap-1.5 text-xs px-1 py-1">
               <UserIcon className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-              <span className="font-bold text-amber-200 truncate max-w-[100px] sm:max-w-[140px]">
+              <span className="font-bold text-amber-200 truncate max-w-[120px] sm:max-w-[180px]">
                 {displayName}
               </span>
             </div>
-
-            {/* Family Admin Account Button */}
-            {onOpenFamilyModal && (
-              <button
-                onClick={onOpenFamilyModal}
-                className="p-[6px] px-[8px] rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 transition-all text-xs flex items-center gap-[4px] font-semibold border border-slate-700"
-                title="Gestione Famiglia"
-              >
-                <ShieldCheck className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                <span className="hidden md:inline">Famiglia</span>
-              </button>
-            )}
-
-            {/* Logout Button */}
-            {onLogout && (
-              <button
-                onClick={onLogout}
-                className="p-[6px] px-[10px] rounded-xl bg-[#f37021] hover:bg-[#d95d13] text-white transition-all text-xs flex items-center gap-[5px] font-bold shadow-xs border border-amber-400/30"
-                title="Disconnetti account"
-              >
-                <LogOut className="w-3.5 h-3.5 shrink-0" />
-                <span className="hidden xs:inline">Esci</span>
-              </button>
-            )}
           </div>
         </div>
 
-        {/* Navigation Bar - Family Roles + Separated Frigorifero & Dispensa */}
-        <div className="hidden md:flex items-center gap-2 p-[4px] bg-[#0d0d40] rounded-xl border border-slate-700">
-          {/* Family Profiles Group (Planner, Chef, Shopper) */}
+        {/* Mainbar Navigation */}
+        <div className="flex items-center justify-between gap-2 p-[4px] bg-[#0d0d40] rounded-xl border border-slate-700 relative">
+          {/* Main 3 Navigation Items */}
           <div className="flex-1 grid grid-cols-3 gap-[5px]">
-            {USER_PROFILES.filter((p) => p.id !== 'pantry').map((profile) => {
-              const isActive = currentRole === profile.id;
-              return (
-                <button
-                  key={profile.id}
-                  id={`profile-nav-${profile.id}`}
-                  onClick={() => onSelectRole(profile.id)}
-                  className={`flex items-center justify-center gap-[6px] p-[6px] rounded-lg text-xs font-bold transition-all duration-200 ${
-                    isActive
-                      ? 'bg-[#f37021] text-white shadow-md'
-                      : 'text-slate-300 hover:text-white hover:bg-white/10'
-                  }`}
-                >
-                  <span className="p-[2px] rounded bg-white/20">{getProfileIcon(profile.id)}</span>
-                  <span className="truncate">{profile.name}</span>
-                </button>
-              );
-            })}
+            {/* 1. RICETTE */}
+            <button
+              id="main-nav-recipes"
+              onClick={() => { onSelectTab('recipes'); setIsMenuOpen(false); }}
+              className={`flex items-center justify-center gap-[6px] p-[8px] rounded-lg text-xs font-bold transition-all duration-200 ${
+                activeTab === 'recipes'
+                  ? 'bg-[#f37021] text-white shadow-md'
+                  : 'text-slate-300 hover:text-white hover:bg-white/10'
+              }`}
+            >
+              <BookOpen className="w-4 h-4 shrink-0" />
+              <span className="truncate">Ricette</span>
+            </button>
+
+            {/* 2. CALENDARIO */}
+            <button
+              id="main-nav-calendar"
+              onClick={() => { onSelectTab('calendar'); setIsMenuOpen(false); }}
+              className={`flex items-center justify-center gap-[6px] p-[8px] rounded-lg text-xs font-bold transition-all duration-200 ${
+                activeTab === 'calendar'
+                  ? 'bg-[#f37021] text-white shadow-md'
+                  : 'text-slate-300 hover:text-white hover:bg-white/10'
+              }`}
+            >
+              <Calendar className="w-4 h-4 shrink-0" />
+              <span className="truncate">Calendario</span>
+            </button>
+
+            {/* 3. FRIGO DISPENSA */}
+            <button
+              id="main-nav-pantry"
+              onClick={() => { onSelectTab('pantry'); setIsMenuOpen(false); }}
+              className={`flex items-center justify-center gap-[6px] p-[8px] rounded-lg text-xs font-bold transition-all duration-200 ${
+                activeTab === 'pantry'
+                  ? 'bg-emerald-600 text-white shadow-md ring-1 ring-emerald-400'
+                  : 'text-emerald-300 hover:text-white hover:bg-emerald-950/50'
+              }`}
+            >
+              <Refrigerator className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span className="truncate">Frigo & Dispensa</span>
+            </button>
           </div>
 
-          {/* Vertical Separator */}
-          <div className="w-[1px] h-6 bg-slate-700 mx-1" />
+          {/* Vertical Divider */}
+          <div className="w-[1px] h-6 bg-slate-700 mx-0.5" />
 
-          {/* Standalone Frigorifero & Dispensa Button */}
-          <button
-            id="profile-nav-pantry"
-            onClick={() => onSelectRole('pantry')}
-            className={`flex items-center justify-center gap-[6px] p-[6px] px-3 rounded-lg text-xs font-bold transition-all duration-200 border ${
-              currentRole === 'pantry'
-                ? 'bg-emerald-600 text-white border-emerald-400 shadow-md ring-2 ring-emerald-500/30'
-                : 'bg-emerald-950/40 text-emerald-300 border-emerald-800/80 hover:bg-emerald-900/60 hover:text-white'
-            }`}
-          >
-            <Refrigerator className="w-4 h-4 text-emerald-400 shrink-0" />
-            <span className="truncate">Frigorifero & Dispensa</span>
-          </button>
+          {/* 4. LINEETTE PER SOTTOMENÙ (Hamburger Icon ☰) */}
+          <div className="relative" ref={menuRef}>
+            <button
+              id="main-nav-submenu-btn"
+              onClick={() => setIsMenuOpen(!isMenuOpen)}
+              className={`p-[8px] px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 border ${
+                isMenuOpen || activeTab === 'stats'
+                  ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-md font-extrabold'
+                  : 'bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700 hover:text-white'
+              }`}
+              title="Apri Sottomenù"
+            >
+              <Menu className="w-4 h-4 shrink-0" />
+              <span className="hidden sm:inline">Menu</span>
+            </button>
+
+            {/* Submenu Dropdown */}
+            {isMenuOpen && (
+              <div className="absolute right-0 top-full mt-2 w-56 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden z-50 p-1.5 flex flex-col gap-1 text-slate-200 animate-in fade-in zoom-in-95 duration-150">
+                {/* Sottomenù Item 1: Famiglia */}
+                {onOpenFamilyModal && (
+                  <button
+                    onClick={() => {
+                      setIsMenuOpen(false);
+                      onOpenFamilyModal();
+                    }}
+                    className="w-full text-left px-3 py-2.5 rounded-lg text-xs font-bold hover:bg-slate-800 text-slate-200 hover:text-white flex items-center gap-2.5 transition-colors"
+                  >
+                    <Users className="w-4 h-4 text-amber-400 shrink-0" />
+                    <span>Famiglia</span>
+                  </button>
+                )}
+
+                {/* Sottomenù Item 2: Impostazioni */}
+                {onOpenSettingsModal && (
+                  <button
+                    onClick={() => {
+                      setIsMenuOpen(false);
+                      onOpenSettingsModal();
+                    }}
+                    className="w-full text-left px-3 py-2.5 rounded-lg text-xs font-bold hover:bg-slate-800 text-slate-200 hover:text-white flex items-center gap-2.5 transition-colors"
+                  >
+                    <Settings className="w-4 h-4 text-blue-400 shrink-0" />
+                    <span>Impostazioni</span>
+                  </button>
+                )}
+
+                {/* Sottomenù Item 3: Statistiche */}
+                <button
+                  onClick={() => {
+                    setIsMenuOpen(false);
+                    onSelectTab('stats');
+                  }}
+                  className={`w-full text-left px-3 py-2.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-2.5 ${
+                    activeTab === 'stats'
+                      ? 'bg-[#f37021]/20 text-[#f37021] border border-[#f37021]/40'
+                      : 'hover:bg-slate-800 text-slate-200 hover:text-white'
+                  }`}
+                >
+                  <BarChart3 className="w-4 h-4 text-purple-400 shrink-0" />
+                  <span>Statistiche</span>
+                </button>
+
+                {/* Optional Logout in Submenu */}
+                {onLogout && (
+                  <div className="pt-1 mt-1 border-t border-slate-800">
+                    <button
+                      onClick={() => {
+                        setIsMenuOpen(false);
+                        onLogout();
+                      }}
+                      className="w-full text-left px-3 py-2 rounded-lg text-xs font-bold text-rose-400 hover:bg-rose-500/10 transition-colors flex items-center gap-2.5"
+                    >
+                      <LogOut className="w-4 h-4 text-rose-400 shrink-0" />
+                      <span>Esci dall'app</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </header>
   );
 };
-
-

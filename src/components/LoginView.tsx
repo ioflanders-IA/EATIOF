@@ -150,29 +150,23 @@ export function LoginView({ onLoginSuccess }: LoginViewProps) {
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-slate-800 border border-slate-700/80 rounded-2xl shadow-2xl overflow-hidden p-6 sm:p-8">
+      <div className="w-full max-w-md bg-transparent border-0 shadow-none overflow-hidden p-4 sm:p-6 flex flex-col gap-[10px]">
         
-        {/* Logo & Header */}
-        <div className="text-center mb-6">
-          <div className="inline-block p-3 bg-slate-900/80 rounded-2xl border border-slate-700 shadow-inner mb-3">
+        {/* Logo Header (Title & subtitle removed as requested) */}
+        <div className="text-center mb-[10px]">
+          <div className="inline-block p-3 bg-slate-900/80 rounded-2xl shadow-inner">
             <EatiofLogo className="h-12 mx-auto" />
           </div>
-          <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
-            Benvenuto in EATIOF
-          </h1>
-          <p className="text-xs sm:text-sm text-amber-400/90 font-medium mt-1">
-            Gestione Pasti Familiari e Spesa Smart
-          </p>
         </div>
 
         {/* Tab Selection */}
-        <div className="flex bg-slate-900/90 p-1 rounded-xl border border-slate-700/60 mb-6 text-xs sm:text-sm font-semibold">
+        <div className="flex bg-slate-900/90 p-1 rounded-xl mb-[10px] text-xs sm:text-sm font-semibold gap-[10px]">
           <button
             type="button"
             onClick={() => { setActiveTab('email'); setErrorMessage(null); setDomainErrorMsg(null); }}
-            className={`flex-1 py-2 rounded-lg transition-all text-center flex items-center justify-center gap-1.5 ${
+            className={`flex-1 py-2 rounded-lg transition-all text-center flex items-center justify-center gap-[5px] ${
               activeTab === 'email'
-                ? 'bg-[#f37021] text-white shadow-md'
+                ? 'bg-[#f37021] text-white shadow-md font-bold'
                 : 'text-slate-400 hover:text-white'
             }`}
           >
@@ -182,9 +176,9 @@ export function LoginView({ onLoginSuccess }: LoginViewProps) {
           <button
             type="button"
             onClick={() => { setActiveTab('google'); setErrorMessage(null); setDomainErrorMsg(null); }}
-            className={`flex-1 py-2 rounded-lg transition-all text-center flex items-center justify-center gap-1.5 ${
+            className={`flex-1 py-2 rounded-lg transition-all text-center flex items-center justify-center gap-[5px] ${
               activeTab === 'google'
-                ? 'bg-[#f37021] text-white shadow-md'
+                ? 'bg-[#f37021] text-white shadow-md font-bold'
                 : 'text-slate-400 hover:text-white'
             }`}
           >
@@ -194,9 +188,9 @@ export function LoginView({ onLoginSuccess }: LoginViewProps) {
           <button
             type="button"
             onClick={() => { setActiveTab('family'); setErrorMessage(null); setDomainErrorMsg(null); }}
-            className={`flex-1 py-2 rounded-lg transition-all text-center flex items-center justify-center gap-1.5 ${
+            className={`flex-1 py-2 rounded-lg transition-all text-center flex items-center justify-center gap-[5px] ${
               activeTab === 'family'
-                ? 'bg-[#f37021] text-white shadow-md'
+                ? 'bg-[#f37021] text-white shadow-md font-bold'
                 : 'text-slate-400 hover:text-white'
             }`}
           >
@@ -207,24 +201,24 @@ export function LoginView({ onLoginSuccess }: LoginViewProps) {
 
         {/* Unauthorized Domain Error Box */}
         {domainErrorMsg && (
-          <div className="mb-5 p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-200 text-xs leading-relaxed flex flex-col gap-2">
-            <div className="flex items-center gap-2 font-bold text-amber-400 text-sm">
+          <div className="mb-[10px] p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-200 text-xs leading-relaxed flex flex-col gap-[10px]">
+            <div className="flex items-center gap-[10px] font-bold text-amber-400 text-sm">
               <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0" />
               Dominio non autorizzato su Google Auth
             </div>
             <p className="text-slate-200">
               Per usare l'accesso con <strong>Google</strong> con il tuo progetto Firebase <code className="bg-slate-900 px-1.5 py-0.5 rounded text-amber-300 font-mono">eatiof</code>:
             </p>
-            <ol className="list-decimal list-inside space-y-1 text-slate-300 pl-1">
+            <ol className="list-decimal list-inside space-y-[5px] text-slate-300 pl-1">
               <li>Apri la <a href="https://console.firebase.google.com/" target="_blank" rel="noopener noreferrer" className="text-amber-400 underline font-semibold">Console Firebase</a> → Progetto <strong>eatiof</strong></li>
               <li>Vai su <strong>Authentication</strong> → Scheda <strong>Settings</strong> → <strong>Authorized Domains</strong></li>
               <li>Aggiungi il dominio: <span className="select-all font-mono text-[11px] bg-slate-900 px-1.5 py-0.5 rounded text-amber-300 border border-amber-500/30 break-all">{window.location.hostname}</span></li>
             </ol>
-            <div className="pt-2 border-t border-amber-500/20 flex flex-col gap-2">
+            <div className="pt-2 border-t border-amber-500/20 flex flex-col gap-[10px]">
               <p className="text-slate-300 font-semibold">
                 💡 Nel frattempo puoi accedere subito usando:
               </p>
-              <div className="flex gap-2">
+              <div className="flex gap-[10px]">
                 <button
                   type="button"
                   onClick={() => { setActiveTab('email'); setDomainErrorMsg(null); }}
@@ -246,7 +240,7 @@ export function LoginView({ onLoginSuccess }: LoginViewProps) {
 
         {/* General Error Box */}
         {errorMessage && (
-          <div className="mb-5 p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-300 text-xs flex items-center gap-2">
+          <div className="mb-[10px] p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-300 text-xs flex items-center gap-[10px]">
             <ShieldAlert className="w-4 h-4 shrink-0 text-rose-400" />
             <span>{errorMessage}</span>
           </div>
@@ -254,10 +248,10 @@ export function LoginView({ onLoginSuccess }: LoginViewProps) {
 
         {/* EMAIL & PASSWORD TAB */}
         {activeTab === 'email' && (
-          <form onSubmit={handleEmailAuth} className="space-y-4">
+          <form onSubmit={handleEmailAuth} className="space-y-[10px]">
             {isRegisterMode && (
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">
+              <div className="space-y-[5px]">
+                <label className="block text-xs font-semibold text-slate-300">
                   Nome / Soprannome
                 </label>
                 <input
@@ -266,13 +260,13 @@ export function LoginView({ onLoginSuccess }: LoginViewProps) {
                   placeholder="Es. Andrea, Mamma, Papà..."
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white placeholder-slate-500 text-sm focus:outline-none focus:border-[#f37021]"
+                  className="w-full px-3.5 py-2.5 bg-slate-950/90 border-2 border-slate-700 hover:border-slate-600 focus:border-[#f37021] rounded-xl text-white placeholder-slate-400 text-sm focus:outline-none transition-colors shadow-inner"
                 />
               </div>
             )}
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">
+            <div className="space-y-[5px]">
+              <label className="block text-xs font-semibold text-slate-300">
                 Indirizzo Email
               </label>
               <input
@@ -281,12 +275,12 @@ export function LoginView({ onLoginSuccess }: LoginViewProps) {
                 placeholder="nome@famiglia.it"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white placeholder-slate-500 text-sm focus:outline-none focus:border-[#f37021]"
+                className="w-full px-3.5 py-2.5 bg-slate-950/90 border-2 border-slate-700 hover:border-slate-600 focus:border-[#f37021] rounded-xl text-white placeholder-slate-400 text-sm focus:outline-none transition-colors shadow-inner"
               />
             </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">
+            <div className="space-y-[5px]">
+              <label className="block text-xs font-semibold text-slate-300">
                 Password
               </label>
               <input
@@ -295,30 +289,31 @@ export function LoginView({ onLoginSuccess }: LoginViewProps) {
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white placeholder-slate-500 text-sm focus:outline-none focus:border-[#f37021]"
+                className="w-full px-3.5 py-2.5 bg-slate-950/90 border-2 border-slate-700 hover:border-slate-600 focus:border-[#f37021] rounded-xl text-white placeholder-slate-400 text-sm focus:outline-none transition-colors shadow-inner"
               />
             </div>
 
             {/* Remember Me Checkbox */}
             <div className="flex items-center justify-between text-xs text-slate-300 pt-1">
-              <label className="flex items-center gap-2 cursor-pointer select-none">
+              <label className="flex items-center gap-[10px] cursor-pointer select-none">
                 <input
                   type="checkbox"
                   checked={rememberMe}
                   onChange={(e) => setRememberMe(e.target.checked)}
-                  className="rounded bg-slate-900 border-slate-700 text-[#f37021] focus:ring-[#f37021] w-4 h-4"
+                  className="rounded bg-slate-950 border border-slate-600 text-[#f37021] focus:ring-[#f37021] w-4 h-4"
                 />
                 <span>Ricordami su questo dispositivo</span>
               </label>
             </div>
 
+            {/* Accedi button: background removed, thicker orange border */}
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full py-3 bg-[#f37021] hover:bg-[#e05f10] text-white font-bold rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 text-sm disabled:opacity-50"
+              className="w-full py-3 bg-transparent hover:bg-[#f37021]/15 border-2 border-[#f37021] text-[#f37021] font-black rounded-xl transition-all flex items-center justify-center gap-[10px] text-sm disabled:opacity-50"
             >
               {isLoading ? (
-                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                <div className="w-5 h-5 border-2 border-[#f37021] border-t-transparent rounded-full animate-spin" />
               ) : isRegisterMode ? (
                 <>
                   <UserPlus className="w-4 h-4" />
@@ -348,19 +343,19 @@ export function LoginView({ onLoginSuccess }: LoginViewProps) {
 
         {/* GOOGLE TAB */}
         {activeTab === 'google' && (
-          <div className="space-y-4 py-2">
+          <div className="space-y-[10px] py-2">
             <p className="text-xs text-slate-300 text-center leading-relaxed">
               Accedi rapidamente utilizzando il tuo account Google. Ideale per la sincronizzazione immediata del ricettario e della spesa.
             </p>
 
             {/* Remember Me Checkbox */}
             <div className="flex items-center justify-center text-xs text-slate-300 py-1">
-              <label className="flex items-center gap-2 cursor-pointer select-none">
+              <label className="flex items-center gap-[10px] cursor-pointer select-none">
                 <input
                   type="checkbox"
                   checked={rememberMe}
                   onChange={(e) => setRememberMe(e.target.checked)}
-                  className="rounded bg-slate-900 border-slate-700 text-[#f37021] focus:ring-[#f37021] w-4 h-4"
+                  className="rounded bg-slate-900 border-0 text-[#f37021] focus:ring-[#f37021] w-4 h-4"
                 />
                 <span>Ricordami su questo dispositivo</span>
               </label>
@@ -370,7 +365,7 @@ export function LoginView({ onLoginSuccess }: LoginViewProps) {
               type="button"
               onClick={handleGoogleAuth}
               disabled={isLoading}
-              className="w-full py-3.5 bg-white hover:bg-slate-100 text-slate-900 font-bold rounded-xl shadow-lg transition-all flex items-center justify-center gap-3 text-sm disabled:opacity-50"
+              className="w-full py-3.5 bg-white hover:bg-slate-100 text-slate-900 font-bold rounded-xl shadow-lg transition-all flex items-center justify-center gap-[10px] text-sm disabled:opacity-50"
             >
               {isLoading ? (
                 <div className="w-5 h-5 border-2 border-[#191970] border-t-transparent rounded-full animate-spin" />
@@ -403,12 +398,12 @@ export function LoginView({ onLoginSuccess }: LoginViewProps) {
 
         {/* QUICK FAMILY PROFILES TAB */}
         {activeTab === 'family' && (
-          <div className="space-y-3">
+          <div className="space-y-[10px]">
             <p className="text-xs text-slate-300 text-center mb-2">
               Seleziona il tuo profilo familiare per entrare all'istante (ideale su tablet in cucina o uso condiviso):
             </p>
 
-            <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+            <div className="space-y-[10px] max-h-64 overflow-y-auto pr-1">
               {familyMembers.length > 0 ? (
                 familyMembers.map((member, i) => (
                   <button
@@ -420,10 +415,10 @@ export function LoginView({ onLoginSuccess }: LoginViewProps) {
                         member.email || `membro${i + 1}@eatiof.local`
                       )
                     }
-                    className="w-full p-3 bg-slate-900 hover:bg-slate-700/80 border border-slate-700/80 rounded-xl transition-all flex items-center justify-between text-left group"
+                    className="w-full p-3 bg-slate-900/80 hover:bg-slate-700/80 rounded-xl transition-all flex items-center justify-between text-left group"
                   >
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-amber-500/20 text-amber-400 font-bold flex items-center justify-center text-sm border border-amber-500/30">
+                    <div className="flex items-center gap-[10px]">
+                      <div className="w-10 h-10 rounded-full bg-amber-500/20 text-amber-400 font-bold flex items-center justify-center text-sm">
                         👤
                       </div>
                       <div>
@@ -443,10 +438,10 @@ export function LoginView({ onLoginSuccess }: LoginViewProps) {
                   <button
                     type="button"
                     onClick={() => handleFamilyQuickLogin('Padre', 'padre@eatiof.local')}
-                    className="w-full p-3 bg-slate-900 hover:bg-slate-700/80 border border-slate-700/80 rounded-xl transition-all flex items-center justify-between text-left group"
+                    className="w-full p-3 bg-slate-900/80 hover:bg-slate-700/80 rounded-xl transition-all flex items-center justify-between text-left group"
                   >
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-blue-500/20 text-blue-400 font-bold flex items-center justify-center text-sm border border-blue-500/30">
+                    <div className="flex items-center gap-[10px]">
+                      <div className="w-10 h-10 rounded-full bg-blue-500/20 text-blue-400 font-bold flex items-center justify-center text-sm">
                         👨‍🍳
                       </div>
                       <div>
@@ -462,10 +457,10 @@ export function LoginView({ onLoginSuccess }: LoginViewProps) {
                   <button
                     type="button"
                     onClick={() => handleFamilyQuickLogin('Madre', 'madre@eatiof.local')}
-                    className="w-full p-3 bg-slate-900 hover:bg-slate-700/80 border border-slate-700/80 rounded-xl transition-all flex items-center justify-between text-left group"
+                    className="w-full p-3 bg-slate-900/80 hover:bg-slate-700/80 rounded-xl transition-all flex items-center justify-between text-left group"
                   >
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-amber-500/20 text-amber-400 font-bold flex items-center justify-center text-sm border border-amber-500/30">
+                    <div className="flex items-center gap-[10px]">
+                      <div className="w-10 h-10 rounded-full bg-amber-500/20 text-amber-400 font-bold flex items-center justify-center text-sm">
                         👩‍🍳
                       </div>
                       <div>
@@ -483,12 +478,12 @@ export function LoginView({ onLoginSuccess }: LoginViewProps) {
 
             {/* Remember Me Checkbox */}
             <div className="flex items-center justify-center text-xs text-slate-300 pt-2">
-              <label className="flex items-center gap-2 cursor-pointer select-none">
+              <label className="flex items-center gap-[10px] cursor-pointer select-none">
                 <input
                   type="checkbox"
                   checked={rememberMe}
                   onChange={(e) => setRememberMe(e.target.checked)}
-                  className="rounded bg-slate-900 border-slate-700 text-[#f37021] focus:ring-[#f37021] w-4 h-4"
+                  className="rounded bg-slate-900 border-0 text-[#f37021] focus:ring-[#f37021] w-4 h-4"
                 />
                 <span>Ricordami su questo dispositivo</span>
               </label>
@@ -496,10 +491,10 @@ export function LoginView({ onLoginSuccess }: LoginViewProps) {
           </div>
         )}
 
-        {/* Footer Note */}
-        <div className="mt-8 pt-4 border-t border-slate-700/60 text-center">
-          <p className="text-[11px] text-slate-400">
-            EATIOF v1.0 • PWA Famiglia Sincronizzata con Firebase
+        {/* Footer Note (Cleaned up as requested: only "EATIOF v1.0") */}
+        <div className="mt-[10px] pt-[10px] text-center border-t border-slate-800">
+          <p className="text-[11px] text-slate-400 font-semibold">
+            EATIOF v1.0
           </p>
         </div>
 

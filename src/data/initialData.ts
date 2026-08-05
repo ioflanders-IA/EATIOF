@@ -44,6 +44,7 @@ export const INITIAL_RECIPES: Recipe[] = [
     id: 'recipe-1',
     name: 'Fregnacce alla sabina',
     category: 'Sabina',
+    course: 'Primi',
     prepTimeMinutes: 30,
     servings: 4,
     nutrition: { calories: 480, protein: 16, fat: 18, carbs: 62 },
@@ -62,6 +63,7 @@ export const INITIAL_RECIPES: Recipe[] = [
     id: 'recipe-2',
     name: "Spaghetti all'Amatriciana",
     category: 'Lazio',
+    course: 'Primi',
     prepTimeMinutes: 25,
     servings: 4,
     nutrition: { calories: 620, protein: 22, fat: 26, carbs: 74 },
@@ -79,6 +81,7 @@ export const INITIAL_RECIPES: Recipe[] = [
     id: 'recipe-3',
     name: 'Pollo alla romana con i peperoni',
     category: 'Lazio',
+    course: 'Secondi',
     prepTimeMinutes: 50,
     servings: 4,
     nutrition: { calories: 420, protein: 45, fat: 22, carbs: 12 },
@@ -96,6 +99,7 @@ export const INITIAL_RECIPES: Recipe[] = [
     id: 'recipe-4',
     name: 'Abbacchio a scottadito',
     category: 'Sabina',
+    course: 'Secondi',
     prepTimeMinutes: 20,
     servings: 4,
     nutrition: { calories: 510, protein: 42, fat: 36, carbs: 2 },
@@ -113,6 +117,7 @@ export const INITIAL_RECIPES: Recipe[] = [
     id: 'recipe-5',
     name: 'Stracciatella alla romana (zuppa)',
     category: 'Lazio',
+    course: 'Primi',
     prepTimeMinutes: 15,
     servings: 4,
     nutrition: { calories: 240, protein: 18, fat: 16, carbs: 6 },
@@ -130,6 +135,7 @@ export const INITIAL_RECIPES: Recipe[] = [
     id: 'recipe-6',
     name: 'Carbonara',
     category: 'Lazio',
+    course: 'Primi',
     prepTimeMinutes: 20,
     servings: 4,
     nutrition: { calories: 680, protein: 26, fat: 32, carbs: 72 },
@@ -146,6 +152,7 @@ export const INITIAL_RECIPES: Recipe[] = [
     id: 'recipe-7',
     name: 'Pasta al pomodoro (Classica)',
     category: 'Classica',
+    course: 'Primi',
     prepTimeMinutes: 15,
     servings: 4,
     nutrition: { calories: 390, protein: 12, fat: 9, carbs: 66 },
@@ -162,6 +169,7 @@ export const INITIAL_RECIPES: Recipe[] = [
     id: 'recipe-8',
     name: 'Petto di pollo ai ferri con insalata (Classica)',
     category: 'Classica',
+    course: 'Secondi',
     prepTimeMinutes: 15,
     servings: 4,
     nutrition: { calories: 280, protein: 40, fat: 10, carbs: 8 },
@@ -174,6 +182,58 @@ export const INITIAL_RECIPES: Recipe[] = [
       { name: 'Origano e sale', quantity: 1, unit: 'q.b.' }
     ],
     instructions: '1. Scaldare molto bene una bistecchiera o piastra antiaderente.\n2. Adagiare le fette di petto di pollo e cuocere 3-4 minuti per lato spolverando con origano e un pizzico di sale.\n3. Preparare l\'insalata lavando le foglie miste e affettando i pomodori.\n4. Condire l\'insalata con olio EVO, sale e succo di limone fresco.\n5. Servire il pollo ben caldo affiancato dall\'insalata croccante.'
+  },
+  {
+    id: 'recipe-9',
+    name: 'Bruschette con pomodoro e Olio EVO Sabina DOP',
+    category: 'Sabina',
+    course: 'Antipasti',
+    prepTimeMinutes: 10,
+    servings: 4,
+    nutrition: { calories: 210, protein: 5, fat: 9, carbs: 28 },
+    ingredients: [
+      { name: 'Pane casareccio di Genzano o rustico', quantity: 8, unit: 'fette' },
+      { name: 'Pomodori rami maturi', quantity: 400, unit: 'g' },
+      { name: 'Aglio', quantity: 1, unit: 'spicchio' },
+      { name: 'Olio EVO Sabina DOP', quantity: 4, unit: 'cucchiai' },
+      { name: 'Basilico fresco', quantity: 8, unit: 'foglie' },
+      { name: 'Sale fino', quantity: 1, unit: 'pizzico' }
+    ],
+    instructions: '1. Tagliare a dadini i pomodori freschi e condirli in una ciotola con sale, basilico spezzettato e un filo d\'olio EVO Sabina.\n2. Tostare le fette di pane casareccio sulla griglia o in forno finché risultano ben dorate e croccanti.\n3. Strofinare delicatamente lo spicchio d\'aglio aperto su un lato del pane caldo.\n4. Distribuire generosamente i pomodori conditi sulle fette e completare con un abbondante giro a crudo di Olio EVO Sabina DOP.'
+  },
+  {
+    id: 'recipe-10',
+    name: 'Carciofi alla romana',
+    category: 'Lazio',
+    course: 'Contorni',
+    prepTimeMinutes: 35,
+    servings: 4,
+    nutrition: { calories: 140, protein: 4, fat: 8, carbs: 14 },
+    ingredients: [
+      { name: 'Carciofi Romaneschi (Mammole)', quantity: 4, unit: 'pz' },
+      { name: 'Mentuccia fresca romana', quantity: 1, unit: 'mazzetto' },
+      { name: 'Aglio', quantity: 2, unit: 'spicchi' },
+      { name: 'Olio EVO Sabina DOP', quantity: 4, unit: 'cucchiai' },
+      { name: 'Vino bianco secco', quantity: 100, unit: 'ml' },
+      { name: 'Limone', quantity: 1, unit: 'pz' }
+    ],
+    instructions: '1. Pulire i carciofi togliendo le foglie esterne più dure, la punta e la peluria interna. Immergerli in acqua acidulata con succo di limone.\n2. Tritare finemente l\'aglio e la mentuccia fresca con un pizzico di sale e pepe.\n3. Farcire il cuore dei carciofi con il trito profumato all\'interno.\n4. Sistemare i carciofi a testa in giù in un tegame a bordi alti, stretti l\'uno all\'altro.\n5. Versare l\'olio EVO, il vino bianco ed un dito d\'acqua. Coprire e cuocere a fuoco lento per 25-30 minuti finché saranno tenerissimi alla forchetta.'
+  },
+  {
+    id: 'recipe-11',
+    name: 'Maritozzo con la panna',
+    category: 'Lazio',
+    course: 'Dolci',
+    prepTimeMinutes: 25,
+    servings: 4,
+    nutrition: { calories: 430, protein: 8, fat: 22, carbs: 50 },
+    ingredients: [
+      { name: 'Maritozzi soffici (Brioche romana)', quantity: 4, unit: 'pz' },
+      { name: 'Panna fresca da montare', quantity: 300, unit: 'ml' },
+      { name: 'Zucchero a velo', quantity: 40, unit: 'g' },
+      { name: 'Scorza d\'arancia grattugiata', quantity: 1, unit: 'cucchiaino' }
+    ],
+    instructions: '1. Montare a neve ferma la panna fresca ben fredda di frigorifero insieme allo zucchero a velo e alla scorza d\'arancia bio.\n2. Tagliare i maritozzi longitudinalmente al centro senza separare del tutto le due metà.\n3. Spennellare l\'interno con un leggerissimo sciroppo di acqua e zucchero.\n4. Farcire generosamente i maritozzi con la panna montata usando una spatola e livellando il taglio esterno perfetto in superficie.\n5. Spolverare con un velo di zucchero a velo prima di servire.'
   }
 ];
 

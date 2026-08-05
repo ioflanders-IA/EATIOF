@@ -50,6 +50,7 @@ export interface Ingredient {
 }
 
 export type CategoryType = 'Sabina' | 'Lazio' | 'Classica' | 'Altro';
+export type DishCourse = 'Antipasti' | 'Primi' | 'Secondi' | 'Contorni' | 'Dolci';
 
 export interface NutritionInfo {
   calories: number; // kcal per porzione
@@ -62,6 +63,7 @@ export interface Recipe {
   id: string;
   name: string;
   category: CategoryType;
+  course?: DishCourse;
   ingredients: Ingredient[];
   instructions: string;
   prepTimeMinutes?: number;
