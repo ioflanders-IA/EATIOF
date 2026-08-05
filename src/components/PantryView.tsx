@@ -88,9 +88,7 @@ export const PantryView: React.FC<PantryViewProps> = ({
   };
 
   const handleDelete = async (id: string, itemName: string) => {
-    if (confirm(`Rimuovere "${itemName}" dalla dispensa/frigo?`)) {
-      await deletePantryItem(id);
-    }
+    await deletePantryItem(id, itemName);
   };
 
   const handleQuickQtyChange = async (item: PantryItem, delta: number) => {

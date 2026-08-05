@@ -399,7 +399,7 @@ export const ShopperView: React.FC<ShopperViewProps> = ({
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  removeShoppingItem(item.id);
+                  removeShoppingItem(item.id, item.ingredientName);
                 }}
                 className="p-[5px] rounded-md text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors shrink-0"
                 title="Rimuovi dalla lista"

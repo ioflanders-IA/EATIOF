@@ -165,7 +165,7 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
   };
 
   const handleDelete = async () => {
-    if (recipe && confirm(`Eliminare la ricetta "${recipe.name}"?`)) {
+    if (recipe) {
       await deleteRecipe(recipe.id);
       onClose();
     }

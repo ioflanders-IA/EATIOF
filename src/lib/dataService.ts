@@ -19,7 +19,11 @@ const STORAGE_KEYS = {
   SHOPPING_LIST: 'eatiof_shopping_list_v1',
   PANTRY: 'eatiof_pantry_v1',
   SEEDED: 'eatiof_seeded_v2',
-  DELETED_RECIPES: 'eatiof_deleted_recipes_v1'
+  DELETED_RECIPES: 'eatiof_deleted_recipes_v1',
+  DELETED_PANTRY: 'eatiof_deleted_pantry_v1',
+  DELETED_PANTRY_NAMES: 'eatiof_deleted_pantry_names_v1',
+  DELETED_SHOPPING: 'eatiof_deleted_shopping_v1',
+  DELETED_SHOPPING_NAMES: 'eatiof_deleted_shopping_names_v1'
 };
 
 function getDeletedRecipeIds(): string[] {
@@ -44,6 +48,106 @@ function removeDeletedRecipeId(id: string) {
   const ids = new Set(getDeletedRecipeIds());
   ids.delete(id);
   localStorage.setItem(STORAGE_KEYS.DELETED_RECIPES, JSON.stringify(Array.from(ids)));
+}
+
+function getDeletedPantryIds(): Set<string> {
+  const data = localStorage.getItem(STORAGE_KEYS.DELETED_PANTRY);
+  if (data) {
+    try {
+      return new Set(JSON.parse(data));
+    } catch {
+      return new Set();
+    }
+  }
+  return new Set();
+}
+
+function addDeletedPantryId(id: string) {
+  const ids = getDeletedPantryIds();
+  ids.add(id);
+  localStorage.setItem(STORAGE_KEYS.DELETED_PANTRY, JSON.stringify(Array.from(ids)));
+}
+
+function removeDeletedPantryId(id: string) {
+  const ids = getDeletedPantryIds();
+  ids.delete(id);
+  localStorage.setItem(STORAGE_KEYS.DELETED_PANTRY, JSON.stringify(Array.from(ids)));
+}
+
+function getDeletedPantryNames(): Set<string> {
+  const data = localStorage.getItem(STORAGE_KEYS.DELETED_PANTRY_NAMES);
+  if (data) {
+    try {
+      return new Set(JSON.parse(data));
+    } catch {
+      return new Set();
+    }
+  }
+  return new Set();
+}
+
+function addDeletedPantryName(name: string) {
+  if (!name) return;
+  const names = getDeletedPantryNames();
+  names.add(name.trim().toLowerCase());
+  localStorage.setItem(STORAGE_KEYS.DELETED_PANTRY_NAMES, JSON.stringify(Array.from(names)));
+}
+
+function removeDeletedPantryName(name: string) {
+  if (!name) return;
+  const names = getDeletedPantryNames();
+  names.delete(name.trim().toLowerCase());
+  localStorage.setItem(STORAGE_KEYS.DELETED_PANTRY_NAMES, JSON.stringify(Array.from(names)));
+}
+
+function getDeletedShoppingIds(): Set<string> {
+  const data = localStorage.getItem(STORAGE_KEYS.DELETED_SHOPPING);
+  if (data) {
+    try {
+      return new Set(JSON.parse(data));
+    } catch {
+      return new Set();
+    }
+  }
+  return new Set();
+}
+
+function addDeletedShoppingId(id: string) {
+  const ids = getDeletedShoppingIds();
+  ids.add(id);
+  localStorage.setItem(STORAGE_KEYS.DELETED_SHOPPING, JSON.stringify(Array.from(ids)));
+}
+
+function removeDeletedShoppingId(id: string) {
+  const ids = getDeletedShoppingIds();
+  ids.delete(id);
+  localStorage.setItem(STORAGE_KEYS.DELETED_SHOPPING, JSON.stringify(Array.from(ids)));
+}
+
+function getDeletedShoppingNames(): Set<string> {
+  const data = localStorage.getItem(STORAGE_KEYS.DELETED_SHOPPING_NAMES);
+  if (data) {
+    try {
+      return new Set(JSON.parse(data));
+    } catch {
+      return new Set();
+    }
+  }
+  return new Set();
+}
+
+function addDeletedShoppingName(name: string) {
+  if (!name) return;
+  const names = getDeletedShoppingNames();
+  names.add(name.trim().toLowerCase());
+  localStorage.setItem(STORAGE_KEYS.DELETED_SHOPPING_NAMES, JSON.stringify(Array.from(names)));
+}
+
+function removeDeletedShoppingName(name: string) {
+  if (!name) return;
+  const names = getDeletedShoppingNames();
+  names.delete(name.trim().toLowerCase());
+  localStorage.setItem(STORAGE_KEYS.DELETED_SHOPPING_NAMES, JSON.stringify(Array.from(names)));
 }
 
 // Helper to strip undefined values from objects before writing to Firestore
@@ -255,25 +359,27 @@ export function subscribeToWeeklyMenu(callback: (menu: WeeklyMenuItem[]) => void
   };
 }
 
-// Global tracking of explicitly deleted item IDs to prevent sync resurrection
-const deletedPantryIds = new Set<string>();
-const deletedShoppingIds = new Set<string>();
-
 export function subscribeToShoppingList(callback: (items: ShoppingListItem[]) => void): () => void {
   let lastFirestoreItems: ShoppingListItem[] = [];
 
   const emitMerged = (firestoreItems: ShoppingListItem[] = lastFirestoreItems) => {
     lastFirestoreItems = firestoreItems;
     const map = new Map<string, ShoppingListItem>();
+    const deletedIds = getDeletedShoppingIds();
+    const deletedNames = getDeletedShoppingNames();
+
+    const addOrUpdate = (i: ShoppingListItem) => {
+      if (!i || !i.id) return;
+      if (deletedIds.has(i.id)) return;
+      const normalizedName = i.ingredientName ? i.ingredientName.trim().toLowerCase() : '';
+      if (normalizedName && deletedNames.has(normalizedName)) return;
+      map.set(i.id, i);
+    };
 
     // 1. Local items
-    getLocalShoppingList().forEach((i) => {
-      if (!deletedShoppingIds.has(i.id)) map.set(i.id, i);
-    });
+    getLocalShoppingList().forEach(addOrUpdate);
     // 2. Firestore items
-    firestoreItems.forEach((i) => {
-      if (!deletedShoppingIds.has(i.id)) map.set(i.id, i);
-    });
+    firestoreItems.forEach(addOrUpdate);
 
     const merged = Array.from(map.values());
     localStorage.setItem(STORAGE_KEYS.SHOPPING_LIST, JSON.stringify(merged));
@@ -294,7 +400,7 @@ export function subscribeToShoppingList(callback: (items: ShoppingListItem[]) =>
       (snapshot) => {
         const firestoreItems: ShoppingListItem[] = [];
         snapshot.forEach((docSnap) => {
-          firestoreItems.push({ id: docSnap.id, ...docSnap.data() } as ShoppingListItem);
+          firestoreItems.push({ ...docSnap.data(), id: docSnap.id } as ShoppingListItem);
         });
         emitMerged(firestoreItems);
       },
@@ -318,28 +424,38 @@ export function subscribeToPantryItems(callback: (items: PantryItem[]) => void):
   const emitMerged = (firestorePantry: PantryItem[] = lastFirestorePantry) => {
     lastFirestorePantry = firestorePantry;
     const map = new Map<string, PantryItem>();
+    const deletedIds = getDeletedPantryIds();
+    const deletedNames = getDeletedPantryNames();
 
-    // 1. Local items first (with cleaned category)
-    getLocalPantryItems().forEach((item) => {
-      if (deletedPantryIds.has(item.id)) return;
+    const addOrUpdate = (item: PantryItem) => {
+      if (!item || !item.id) return;
+      if (deletedIds.has(item.id)) return;
+      const normalizedName = item.name ? item.name.trim().toLowerCase() : '';
+      if (normalizedName && deletedNames.has(normalizedName)) return;
+
       let cat = item.category;
       if (cat && cat.includes('font-bold')) {
         cat = cat.includes('Freezer') ? 'Freezer' : 'Frigo';
       }
-      map.set(item.id, { ...item, category: cat as any });
-    });
+      map.set(item.id, { ...item, category: (cat || 'Frigo') as any });
+    };
 
-    // 2. Remote Firestore items (with cleaned category)
-    firestorePantry.forEach((item) => {
-      if (deletedPantryIds.has(item.id)) return;
-      let cat = item.category;
-      if (cat && cat.includes('font-bold')) {
-        cat = cat.includes('Freezer') ? 'Freezer' : 'Frigo';
+    // 1. Local items first
+    getLocalPantryItems().forEach(addOrUpdate);
+
+    // 2. Remote Firestore items
+    firestorePantry.forEach(addOrUpdate);
+
+    // Deduplicate items with identical normalized name and category
+    const nameMap = new Map<string, PantryItem>();
+    Array.from(map.values()).forEach((item) => {
+      const key = `${item.name.trim().toLowerCase()}_${item.category}`;
+      if (!nameMap.has(key)) {
+        nameMap.set(key, item);
       }
-      map.set(item.id, { ...item, category: cat as any });
     });
 
-    const merged = Array.from(map.values());
+    const merged = Array.from(nameMap.values());
     localStorage.setItem(STORAGE_KEYS.PANTRY, JSON.stringify(merged));
     callback(merged);
   };
@@ -363,7 +479,7 @@ export function subscribeToPantryItems(callback: (items: PantryItem[]) => void):
           if (cat && cat.includes('font-bold')) {
             cat = cat.includes('Freezer') ? 'Freezer' : 'Frigo';
           }
-          firestorePantry.push({ id: docSnap.id, ...data, category: cat as any });
+          firestorePantry.push({ ...data, id: docSnap.id, category: (cat || 'Frigo') as any });
         });
         emitMerged(firestorePantry);
       },
@@ -612,14 +728,46 @@ export async function addManualShoppingItem(ingredientName: string, quantity: nu
   }
 }
 
-export async function removeShoppingItem(itemId: string): Promise<void> {
-  deletedShoppingIds.add(itemId);
-  const items = getLocalShoppingList().filter((i) => i.id !== itemId);
+export async function removeShoppingItem(itemId: string, ingredientName?: string): Promise<void> {
+  addDeletedShoppingId(itemId);
+  const currentItems = getLocalShoppingList();
+  const targetItem = currentItems.find((i) => i.id === itemId);
+  const targetName = (ingredientName || targetItem?.ingredientName || '').trim().toLowerCase();
+
+  if (targetName) {
+    addDeletedShoppingName(targetName);
+  }
+
+  const items = currentItems.filter((i) => {
+    if (i.id === itemId) return false;
+    if (targetName && i.ingredientName && i.ingredientName.trim().toLowerCase() === targetName) return false;
+    return true;
+  });
+
   localStorage.setItem(STORAGE_KEYS.SHOPPING_LIST, JSON.stringify(items));
   notifyLocalChange();
 
   if (isFirebaseConfigured && db) {
     runFirestoreOp(deleteDoc(doc(db, 'shopping_list', itemId)));
+
+    if (targetName) {
+      getDocs(collection(db, 'shopping_list')).then((snap) => {
+        const batch = writeBatch(db);
+        let hasDeletes = false;
+        snap.forEach((docSnap) => {
+          const dData = docSnap.data();
+          const dName = (dData.ingredientName || '').trim().toLowerCase();
+          if (docSnap.id === itemId || dName === targetName) {
+            batch.delete(docSnap.ref);
+            addDeletedShoppingId(docSnap.id);
+            hasDeletes = true;
+          }
+        });
+        if (hasDeletes) {
+          batch.commit().catch(console.warn);
+        }
+      }).catch(console.warn);
+    }
   }
 }
 
@@ -627,7 +775,7 @@ export async function clearCheckedItems(): Promise<void> {
   const itemsToKeep: ShoppingListItem[] = [];
   getLocalShoppingList().forEach((i) => {
     if (i.isChecked) {
-      deletedShoppingIds.add(i.id);
+      addDeletedShoppingId(i.id);
     } else {
       itemsToKeep.push(i);
     }
@@ -779,16 +927,20 @@ export async function generateShoppingListFromMenu(
 // ==========================================
 export async function savePantryItem(item: PantryItem): Promise<void> {
   const itemId = item.id || `pantry-${Date.now()}`;
-  deletedPantryIds.delete(itemId);
+  removeDeletedPantryId(itemId);
+  if (item.name) {
+    removeDeletedPantryName(item.name);
+  }
   const itemToSave = { ...item, id: itemId };
 
-  const items = getLocalPantryItems();
-  const idx = items.findIndex((i) => i.id === itemId);
-  if (idx >= 0) {
-    items[idx] = itemToSave;
-  } else {
-    items.unshift(itemToSave);
-  }
+  const targetName = item.name ? item.name.trim().toLowerCase() : '';
+
+  const items = getLocalPantryItems().filter((i) => {
+    if (i.id === itemId) return false;
+    if (targetName && i.name && i.name.trim().toLowerCase() === targetName && i.category === item.category) return false;
+    return true;
+  });
+  items.unshift(itemToSave);
   localStorage.setItem(STORAGE_KEYS.PANTRY, JSON.stringify(items));
   notifyLocalChange();
 
@@ -797,14 +949,46 @@ export async function savePantryItem(item: PantryItem): Promise<void> {
   }
 }
 
-export async function deletePantryItem(itemId: string): Promise<void> {
-  deletedPantryIds.add(itemId);
-  const items = getLocalPantryItems().filter((i) => i.id !== itemId);
+export async function deletePantryItem(itemId: string, itemName?: string): Promise<void> {
+  addDeletedPantryId(itemId);
+
+  const currentItems = getLocalPantryItems();
+  const targetItem = currentItems.find((i) => i.id === itemId);
+  const targetName = (itemName || targetItem?.name || '').trim().toLowerCase();
+
+  if (targetName) {
+    addDeletedPantryName(targetName);
+  }
+
+  // Filter out by ID or name
+  const items = currentItems.filter((i) => {
+    if (i.id === itemId) return false;
+    if (targetName && i.name && i.name.trim().toLowerCase() === targetName) return false;
+    return true;
+  });
+
   localStorage.setItem(STORAGE_KEYS.PANTRY, JSON.stringify(items));
   notifyLocalChange();
 
   if (isFirebaseConfigured && db) {
     runFirestoreOp(deleteDoc(doc(db, 'pantry', itemId)));
+
+    getDocs(collection(db, 'pantry')).then((snap) => {
+      const batch = writeBatch(db);
+      let hasDeletes = false;
+      snap.forEach((docSnap) => {
+        const dData = docSnap.data();
+        const dName = (dData.name || '').trim().toLowerCase();
+        if (docSnap.id === itemId || (targetName && dName === targetName)) {
+          batch.delete(docSnap.ref);
+          addDeletedPantryId(docSnap.id);
+          hasDeletes = true;
+        }
+      });
+      if (hasDeletes) {
+        batch.commit().catch(console.warn);
+      }
+    }).catch(console.warn);
   }
 }
 
