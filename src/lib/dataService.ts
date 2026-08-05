@@ -255,12 +255,34 @@ export function subscribeToWeeklyMenu(callback: (menu: WeeklyMenuItem[]) => void
   };
 }
 
+// Global tracking of explicitly deleted item IDs to prevent sync resurrection
+const deletedPantryIds = new Set<string>();
+const deletedShoppingIds = new Set<string>();
+
 export function subscribeToShoppingList(callback: (items: ShoppingListItem[]) => void): () => void {
-  const emitLocal = () => callback(getLocalShoppingList());
+  let lastFirestoreItems: ShoppingListItem[] = [];
 
-  emitLocal();
+  const emitMerged = (firestoreItems: ShoppingListItem[] = lastFirestoreItems) => {
+    lastFirestoreItems = firestoreItems;
+    const map = new Map<string, ShoppingListItem>();
 
-  const localHandler = () => emitLocal();
+    // 1. Local items
+    getLocalShoppingList().forEach((i) => {
+      if (!deletedShoppingIds.has(i.id)) map.set(i.id, i);
+    });
+    // 2. Firestore items
+    firestoreItems.forEach((i) => {
+      if (!deletedShoppingIds.has(i.id)) map.set(i.id, i);
+    });
+
+    const merged = Array.from(map.values());
+    localStorage.setItem(STORAGE_KEYS.SHOPPING_LIST, JSON.stringify(merged));
+    callback(merged);
+  };
+
+  emitMerged();
+
+  const localHandler = () => emitMerged();
   window.addEventListener(LOCAL_SYNC_EVENT, localHandler);
   window.addEventListener('storage', localHandler);
 
@@ -270,15 +292,15 @@ export function subscribeToShoppingList(callback: (items: ShoppingListItem[]) =>
     unsubFirestore = onSnapshot(
       collection(db, 'shopping_list'),
       (snapshot) => {
-        const items: ShoppingListItem[] = [];
+        const firestoreItems: ShoppingListItem[] = [];
         snapshot.forEach((docSnap) => {
-          items.push({ id: docSnap.id, ...docSnap.data() } as ShoppingListItem);
+          firestoreItems.push({ id: docSnap.id, ...docSnap.data() } as ShoppingListItem);
         });
-        callback(items);
+        emitMerged(firestoreItems);
       },
       (err) => {
         console.warn('Fallback a LocalStorage per shopping_list:', err?.message || err);
-        emitLocal();
+        emitMerged();
       }
     );
   }
@@ -291,11 +313,40 @@ export function subscribeToShoppingList(callback: (items: ShoppingListItem[]) =>
 }
 
 export function subscribeToPantryItems(callback: (items: PantryItem[]) => void): () => void {
-  const emitLocal = () => callback(getLocalPantryItems());
+  let lastFirestorePantry: PantryItem[] = [];
 
-  emitLocal();
+  const emitMerged = (firestorePantry: PantryItem[] = lastFirestorePantry) => {
+    lastFirestorePantry = firestorePantry;
+    const map = new Map<string, PantryItem>();
 
-  const localHandler = () => emitLocal();
+    // 1. Local items first (with cleaned category)
+    getLocalPantryItems().forEach((item) => {
+      if (deletedPantryIds.has(item.id)) return;
+      let cat = item.category;
+      if (cat && cat.includes('font-bold')) {
+        cat = cat.includes('Freezer') ? 'Freezer' : 'Frigo';
+      }
+      map.set(item.id, { ...item, category: cat as any });
+    });
+
+    // 2. Remote Firestore items (with cleaned category)
+    firestorePantry.forEach((item) => {
+      if (deletedPantryIds.has(item.id)) return;
+      let cat = item.category;
+      if (cat && cat.includes('font-bold')) {
+        cat = cat.includes('Freezer') ? 'Freezer' : 'Frigo';
+      }
+      map.set(item.id, { ...item, category: cat as any });
+    });
+
+    const merged = Array.from(map.values());
+    localStorage.setItem(STORAGE_KEYS.PANTRY, JSON.stringify(merged));
+    callback(merged);
+  };
+
+  emitMerged();
+
+  const localHandler = () => emitMerged();
   window.addEventListener(LOCAL_SYNC_EVENT, localHandler);
   window.addEventListener('storage', localHandler);
 
@@ -305,15 +356,20 @@ export function subscribeToPantryItems(callback: (items: PantryItem[]) => void):
     unsubFirestore = onSnapshot(
       collection(db, 'pantry'),
       (snapshot) => {
-        const items: PantryItem[] = [];
+        const firestorePantry: PantryItem[] = [];
         snapshot.forEach((docSnap) => {
-          items.push({ id: docSnap.id, ...docSnap.data() } as PantryItem);
+          const data = docSnap.data() as PantryItem;
+          let cat = data.category;
+          if (cat && cat.includes('font-bold')) {
+            cat = cat.includes('Freezer') ? 'Freezer' : 'Frigo';
+          }
+          firestorePantry.push({ id: docSnap.id, ...data, category: cat as any });
         });
-        callback(items);
+        emitMerged(firestorePantry);
       },
       (err) => {
         console.warn('Fallback a LocalStorage per pantry:', err?.message || err);
-        emitLocal();
+        emitMerged();
       }
     );
   }
@@ -377,7 +433,22 @@ function getLocalShoppingList(): ShoppingListItem[] {
 
 export function getLocalPantryItems(): PantryItem[] {
   const data = localStorage.getItem(STORAGE_KEYS.PANTRY);
-  return data ? JSON.parse(data) : INITIAL_PANTRY_ITEMS;
+  const items: PantryItem[] = data ? JSON.parse(data) : INITIAL_PANTRY_ITEMS;
+  let hasChanges = false;
+  const cleaned = items.map((item) => {
+    if (item.category && item.category.includes('font-bold')) {
+      hasChanges = true;
+      return {
+        ...item,
+        category: (item.category.includes('Freezer') ? 'Freezer' : 'Frigo') as any
+      };
+    }
+    return item;
+  });
+  if (hasChanges) {
+    localStorage.setItem(STORAGE_KEYS.PANTRY, JSON.stringify(cleaned));
+  }
+  return cleaned;
 }
 
 // Helper for non-blocking Firestore operations with fast timeout fallback
@@ -542,6 +613,7 @@ export async function addManualShoppingItem(ingredientName: string, quantity: nu
 }
 
 export async function removeShoppingItem(itemId: string): Promise<void> {
+  deletedShoppingIds.add(itemId);
   const items = getLocalShoppingList().filter((i) => i.id !== itemId);
   localStorage.setItem(STORAGE_KEYS.SHOPPING_LIST, JSON.stringify(items));
   notifyLocalChange();
@@ -552,8 +624,15 @@ export async function removeShoppingItem(itemId: string): Promise<void> {
 }
 
 export async function clearCheckedItems(): Promise<void> {
-  const items = getLocalShoppingList().filter((i) => !i.isChecked);
-  localStorage.setItem(STORAGE_KEYS.SHOPPING_LIST, JSON.stringify(items));
+  const itemsToKeep: ShoppingListItem[] = [];
+  getLocalShoppingList().forEach((i) => {
+    if (i.isChecked) {
+      deletedShoppingIds.add(i.id);
+    } else {
+      itemsToKeep.push(i);
+    }
+  });
+  localStorage.setItem(STORAGE_KEYS.SHOPPING_LIST, JSON.stringify(itemsToKeep));
   notifyLocalChange();
 
   if (isFirebaseConfigured && db) {
@@ -700,6 +779,7 @@ export async function generateShoppingListFromMenu(
 // ==========================================
 export async function savePantryItem(item: PantryItem): Promise<void> {
   const itemId = item.id || `pantry-${Date.now()}`;
+  deletedPantryIds.delete(itemId);
   const itemToSave = { ...item, id: itemId };
 
   const items = getLocalPantryItems();
@@ -718,6 +798,7 @@ export async function savePantryItem(item: PantryItem): Promise<void> {
 }
 
 export async function deletePantryItem(itemId: string): Promise<void> {
+  deletedPantryIds.add(itemId);
   const items = getLocalPantryItems().filter((i) => i.id !== itemId);
   localStorage.setItem(STORAGE_KEYS.PANTRY, JSON.stringify(items));
   notifyLocalChange();

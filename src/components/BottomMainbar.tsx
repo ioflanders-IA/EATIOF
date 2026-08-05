@@ -36,8 +36,8 @@ export const BottomMainbar: React.FC<BottomMainbarProps> = ({
               <span className="absolute top-0 w-10 h-1 bg-[#f37021] rounded-b-full shadow-sm" />
             )}
             <div
-              className={`p-1.5 rounded-xl transition-transform duration-200 ${
-                activeTab === 'recipes' ? 'bg-[#f37021] text-white scale-110 shadow-md' : 'bg-white/10'
+              className={`transition-transform duration-200 ${
+                activeTab === 'recipes' ? 'text-[#f37021] scale-110' : 'text-slate-300'
               }`}
             >
               <BookOpen className="w-5 h-5" />
@@ -60,8 +60,8 @@ export const BottomMainbar: React.FC<BottomMainbarProps> = ({
               <span className="absolute top-0 w-10 h-1 bg-[#f37021] rounded-b-full shadow-sm" />
             )}
             <div
-              className={`p-1.5 rounded-xl transition-transform duration-200 ${
-                activeTab === 'calendar' ? 'bg-[#f37021] text-white scale-110 shadow-md' : 'bg-white/10'
+              className={`transition-transform duration-200 ${
+                activeTab === 'calendar' ? 'text-[#f37021] scale-110' : 'text-slate-300'
               }`}
             >
               <Calendar className="w-5 h-5" />
@@ -84,8 +84,8 @@ export const BottomMainbar: React.FC<BottomMainbarProps> = ({
               <span className="absolute top-0 w-10 h-1 bg-emerald-500 rounded-b-full shadow-sm" />
             )}
             <div
-              className={`p-1.5 rounded-xl transition-transform duration-200 ${
-                activeTab === 'pantry' ? 'bg-emerald-600 text-white scale-110 shadow-md' : 'bg-white/10 text-emerald-300'
+              className={`transition-transform duration-200 ${
+                activeTab === 'pantry' ? 'text-emerald-400 scale-110' : 'text-slate-300'
               }`}
             >
               <Refrigerator className="w-5 h-5" />
@@ -108,8 +108,8 @@ export const BottomMainbar: React.FC<BottomMainbarProps> = ({
               <span className="absolute top-0 w-10 h-1 bg-amber-400 rounded-b-full shadow-sm" />
             )}
             <div
-              className={`p-1.5 rounded-xl transition-transform duration-200 ${
-                isMenuOpen || activeTab === 'stats' ? 'bg-amber-500 text-slate-950 scale-110 shadow-md' : 'bg-white/10'
+              className={`transition-transform duration-200 ${
+                isMenuOpen || activeTab === 'stats' ? 'text-amber-400 scale-110' : 'text-slate-300'
               }`}
             >
               <Menu className="w-5 h-5" />
@@ -123,21 +123,18 @@ export const BottomMainbar: React.FC<BottomMainbarProps> = ({
 
       {/* Mobile Drawer Popup for Sottomenù */}
       {isMenuOpen && (
-        <div className="fixed inset-0 z-50 md:hidden flex flex-col justify-end bg-slate-950/70 backdrop-blur-xs">
-          <div className="bg-slate-900 border-t border-slate-700 rounded-t-2xl p-4 space-y-3 text-slate-100 shadow-2xl animate-in slide-in-from-bottom duration-200">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-800">
-              <span className="text-xs font-black uppercase tracking-wider text-amber-400">
-                Sottomenù EATIOF
-              </span>
+        <div className="fixed inset-0 z-50 md:hidden flex flex-col justify-end bg-slate-950/70 backdrop-blur-xs p-[10px]">
+          <div className="bg-[#191970] border border-white/20 rounded-2xl p-[10px] space-y-[10px] text-slate-100 shadow-2xl animate-in slide-in-from-bottom duration-200">
+            <div className="flex items-center justify-end pb-[2px]">
               <button
                 onClick={() => setIsMenuOpen(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-white"
+                className="p-[5px] rounded-lg text-slate-300 hover:text-white"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="grid grid-cols-1 gap-2 py-1">
+            <div className="grid grid-cols-1 gap-[10px]">
               {/* Sottomenù Item 1: Famiglia */}
               {onOpenFamilyModal && (
                 <button
@@ -145,12 +142,12 @@ export const BottomMainbar: React.FC<BottomMainbarProps> = ({
                     setIsMenuOpen(false);
                     onOpenFamilyModal();
                   }}
-                  className="w-full text-left p-3 rounded-xl bg-slate-800 hover:bg-slate-750 font-bold text-xs text-slate-200 flex items-center gap-3 border border-slate-700/60"
+                  className="w-full text-left p-[10px] rounded-xl bg-transparent hover:bg-white/10 font-bold text-xs text-slate-200 flex items-center gap-[10px] border border-white/20 transition-colors"
                 >
                   <Users className="w-5 h-5 text-amber-400 shrink-0" />
                   <div>
                     <div className="text-white">Famiglia</div>
-                    <div className="text-[11px] font-normal text-slate-400">Gestisci profili e permessi familiari</div>
+                    <div className="text-[11px] font-normal text-slate-300">Gestisci profili e permessi familiari</div>
                   </div>
                 </button>
               )}
@@ -162,12 +159,12 @@ export const BottomMainbar: React.FC<BottomMainbarProps> = ({
                     setIsMenuOpen(false);
                     onOpenSettingsModal();
                   }}
-                  className="w-full text-left p-3 rounded-xl bg-slate-800 hover:bg-slate-750 font-bold text-xs text-slate-200 flex items-center gap-3 border border-slate-700/60"
+                  className="w-full text-left p-[10px] rounded-xl bg-transparent hover:bg-white/10 font-bold text-xs text-slate-200 flex items-center gap-[10px] border border-white/20 transition-colors"
                 >
                   <Settings className="w-5 h-5 text-blue-400 shrink-0" />
                   <div>
                     <div className="text-white">Impostazioni</div>
-                    <div className="text-[11px] font-normal text-slate-400">Stato database, reset e preferenze</div>
+                    <div className="text-[11px] font-normal text-slate-300">Stato database, reset e preferenze</div>
                   </div>
                 </button>
               )}
@@ -178,16 +175,16 @@ export const BottomMainbar: React.FC<BottomMainbarProps> = ({
                   setIsMenuOpen(false);
                   onSelectTab('stats');
                 }}
-                className={`w-full text-left p-3 rounded-xl font-bold text-xs flex items-center gap-3 border ${
+                className={`w-full text-left p-[10px] rounded-xl font-bold text-xs flex items-center gap-[10px] border transition-colors ${
                   activeTab === 'stats'
-                    ? 'bg-[#f37021]/20 border-[#f37021] text-[#f37021]'
-                    : 'bg-slate-800 border-slate-700/60 text-slate-200'
+                    ? 'bg-transparent border-[#f37021] text-[#f37021]'
+                    : 'bg-transparent border-white/20 text-slate-200 hover:bg-white/10'
                 }`}
               >
                 <BarChart3 className="w-5 h-5 text-purple-400 shrink-0" />
                 <div>
                   <div className="text-white">Statistiche</div>
-                  <div className="text-[11px] font-normal text-slate-400">Valori nutrizionali e bilanciamento pasti</div>
+                  <div className="text-[11px] font-normal text-slate-300">Valori nutrizionali e bilanciamento pasti</div>
                 </div>
               </button>
 
@@ -198,7 +195,7 @@ export const BottomMainbar: React.FC<BottomMainbarProps> = ({
                     setIsMenuOpen(false);
                     onLogout();
                   }}
-                  className="w-full text-left p-3 rounded-xl bg-rose-950/30 border border-rose-800/50 font-bold text-xs text-rose-300 flex items-center gap-3 mt-1"
+                  className="w-full text-left p-[10px] rounded-xl bg-transparent hover:bg-rose-500/20 border border-rose-500/50 font-bold text-xs text-rose-300 flex items-center gap-[10px] mt-[2px] transition-colors"
                 >
                   <LogOut className="w-5 h-5 text-rose-400 shrink-0" />
                   <span>Disconnetti account</span>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Recipe, WeeklyMenuItem, ShoppingListItem, PantryItem, DayOfWeek, MealType, CategoryType, DishCourse, NutritionInfo } from '../types';
 import { DAYS_OF_WEEK } from '../data/initialData';
 import { getFamilyConfig, FAMILY_CONFIG_CHANGED_EVENT } from '../lib/familyAuthService';
@@ -151,6 +151,46 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
   const [pantryItems, setPantryItems] = useState<PantryItem[]>([]);
   const [seasonalItemFor5Recipes, setSeasonalItemFor5Recipes] = useState<SeasonalItem | null>(null);
   const [savedRecipeIds, setSavedRecipeIds] = useState<Set<string>>(new Set());
+
+  // Refs for Infinite Wheel Month Selector in Seasonal Advisor
+  const seasonalMonthContainerRef = useRef<HTMLDivElement>(null);
+  const monthButtonsRef = useRef<(HTMLButtonElement | null)[]>([]);
+
+  useEffect(() => {
+    // Initial scroll positioning to center cycle
+    if (seasonalMonthContainerRef.current) {
+      const container = seasonalMonthContainerRef.current;
+      const singleCycleWidth = container.scrollWidth / 3;
+      if (container.scrollLeft === 0 && singleCycleWidth > 0) {
+        container.scrollLeft = singleCycleWidth;
+      }
+    }
+  }, [activeSubTab]);
+
+  useEffect(() => {
+    // Center selected month button smoothly
+    const activeBtn = monthButtonsRef.current[12 + selectedSeasonalMonth];
+    if (activeBtn && seasonalMonthContainerRef.current) {
+      activeBtn.scrollIntoView({
+        behavior: 'smooth',
+        inline: 'center',
+        block: 'nearest'
+      });
+    }
+  }, [selectedSeasonalMonth, activeSubTab]);
+
+  const handleSeasonalScroll = () => {
+    const container = seasonalMonthContainerRef.current;
+    if (!container) return;
+    const singleCycleWidth = container.scrollWidth / 3;
+    if (singleCycleWidth <= 0) return;
+
+    if (container.scrollLeft < singleCycleWidth * 0.25) {
+      container.scrollLeft += singleCycleWidth;
+    } else if (container.scrollLeft > singleCycleWidth * 1.75) {
+      container.scrollLeft -= singleCycleWidth;
+    }
+  };
 
   useEffect(() => {
     const unsubPantry = subscribeToPantryItems((items) => {
@@ -1016,8 +1056,8 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
       {activeSubTab === 'recipeBook' && (
         <div className="space-y-[10px]">
           {/* Header & New Recipe Action */}
-          <div className="bg-white rounded-lg p-[10px] border border-slate-200 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-[10px]">
-            <div className="flex items-center gap-[5px] w-full sm:w-auto p-[5px]">
+          <div className="bg-white rounded-lg p-[10px] border border-slate-200 shadow-sm flex items-center justify-between gap-[10px]">
+            <div className="flex items-center gap-[5px] p-[5px]">
               <div className="p-[5px] rounded-md bg-[#f37021]/10 text-[#f37021]">
                 <ChefHat className="w-5 h-5" />
               </div>
@@ -1029,56 +1069,49 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
 
             <button
               onClick={() => onOpenRecipeModal()}
-              className="w-full sm:w-auto p-[10px] rounded-md bg-[#f37021] hover:bg-[#d95d13] text-white font-bold text-xs flex items-center justify-center gap-[5px] shadow-sm transition-colors"
+              title="Aggiungi Nuova Ricetta"
+              className="p-[8px] sm:p-[10px] rounded-lg bg-transparent hover:bg-[#f37021]/10 text-[#f37021] border-[2px] border-[#f37021] font-black flex items-center justify-center transition-colors shadow-2xs shrink-0"
             >
-              <Plus className="w-4 h-4 text-white" />
-              <span>Aggiungi Nuova Ricetta</span>
+              <Plus className="w-5 h-5 text-[#f37021] stroke-[3]" />
             </button>
           </div>
 
           {/* Dish Course Filter Tabs (Antipasti, Primi, Secondi, Contorni, Dolci) */}
-          <div className="bg-white rounded-lg p-[10px] border border-slate-200 shadow-sm space-y-[8px]">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-[6px]">
-              <span className="text-[11px] font-black text-[#191970] uppercase tracking-wider flex items-center gap-[4px]">
-                <UtensilsCrossed className="w-3.5 h-3.5 text-[#f37021]" />
-                Filtra per Portata
-              </span>
-              <span className="text-xs text-slate-500 font-semibold">
-                Totale ricette salvate: <strong>{recipes.length}</strong>
-              </span>
+          <div className="bg-white rounded-lg p-[10px] border border-slate-200 shadow-sm space-y-[6px]">
+            <div className="flex items-center justify-between text-xs text-slate-500 font-semibold pb-[2px]">
+              <span className="font-bold text-[#191970] uppercase tracking-wider text-[11px]">Filtra per Portata</span>
+              <span>Totale ricette salvate: <strong>{recipes.length}</strong></span>
             </div>
 
-            <div className="flex items-center gap-[5px] flex-wrap">
-              {(['Tutti', 'Antipasti', 'Primi', 'Secondi', 'Contorni', 'Dolci'] as const).map((c) => {
-                const count = c === 'Tutti' 
-                  ? recipes.length 
-                  : recipes.filter(r => (r.course || inferCourseFromRecipe(r.name, r.category)) === c).length;
+            {/* Row 1: Tutti Button */}
+            <div>
+              <button
+                onClick={() => setSelectedCourseFilter('Tutti')}
+                className={`w-full p-[6px] rounded-md text-xs font-extrabold transition-all text-center ${
+                  selectedCourseFilter === 'Tutti'
+                    ? 'bg-[#191970] text-white shadow-xs'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200'
+                }`}
+              >
+                Tutti
+              </button>
+            </div>
 
-                return (
-                  <button
-                    key={c}
-                    onClick={() => setSelectedCourseFilter(c)}
-                    className={`p-[6px] px-[12px] rounded-full text-xs font-extrabold transition-all flex items-center gap-[4px] ${
-                      selectedCourseFilter === c
-                        ? 'bg-[#191970] text-white shadow-xs'
-                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200'
-                    }`}
-                  >
-                    <span>
-                      {c === 'Tutti' && '🍽️'}
-                      {c === 'Antipasti' && '🥗'}
-                      {c === 'Primi' && '🍝'}
-                      {c === 'Secondi' && '🥩'}
-                      {c === 'Contorni' && '🥬'}
-                      {c === 'Dolci' && '🍰'}
-                    </span>
-                    <span>{c}</span>
-                    <span className={`text-[10px] px-[5px] py-[1px] rounded-full ${selectedCourseFilter === c ? 'bg-[#f37021] text-white' : 'bg-slate-200 text-slate-700'}`}>
-                      {count}
-                    </span>
-                  </button>
-                );
-              })}
+            {/* Row 2: 5 Courses fitting exactly across mobile screen width */}
+            <div className="grid grid-cols-5 gap-[3px] sm:gap-[5px]">
+              {(['Antipasti', 'Primi', 'Secondi', 'Contorni', 'Dolci'] as const).map((c) => (
+                <button
+                  key={c}
+                  onClick={() => setSelectedCourseFilter(c)}
+                  className={`p-[5px] sm:p-[6px] px-[2px] sm:px-[6px] rounded-md text-[10px] sm:text-xs font-extrabold transition-all text-center truncate ${
+                    selectedCourseFilter === c
+                      ? 'bg-[#191970] text-white shadow-xs'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200'
+                  }`}
+                >
+                  {c}
+                </button>
+              ))}
             </div>
 
             {/* Sub-filter by Tradition/Category */}
@@ -1109,29 +1142,40 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
                 </div>
                 <div>
                   <h4 className="font-extrabold text-xs sm:text-base text-emerald-100 flex items-center gap-[5px]">
-                    Guida Alimentazione di Stagione & Ortofrutta
+                    Prodotti stagionali
                   </h4>
                   <p className="text-[11px] sm:text-xs text-emerald-200 leading-tight">
-                    Scegli alimenti di stagione per un'alimentazione piu ricca di nutrienti e gusto
+                    Scegli tra gli elementi in questa stagione
                   </p>
                 </div>
               </div>
 
-              {/* Month Selector for Seasonality */}
-              <div className="flex items-center gap-[5px] bg-emerald-800/80 p-[5px] rounded-md border border-emerald-700 overflow-x-auto max-w-full">
-                {MONTHLY_SEASONAL_PRODUCE.map((m, idx) => (
-                  <button
-                    key={m.monthName}
-                    onClick={() => setSelectedSeasonalMonth(idx)}
-                    className={`p-[3px] px-[6px] rounded text-[10px] sm:text-[11px] font-bold whitespace-nowrap transition-all ${
-                      selectedSeasonalMonth === idx
-                        ? 'bg-[#f37021] text-white shadow-xs font-black'
-                        : 'text-emerald-200 hover:bg-emerald-700/60'
-                    }`}
-                  >
-                    {m.monthName.slice(0, 3)}
-                  </button>
-                ))}
+              {/* Month Selector Wheel for Seasonality (Borderless & Infinite Looping) */}
+              <div
+                ref={seasonalMonthContainerRef}
+                onScroll={handleSeasonalScroll}
+                className="flex items-center gap-[5px] bg-emerald-950/40 p-[5px] rounded-md overflow-x-auto max-w-full scrollbar-none snap-x snap-mandatory"
+              >
+                {[0, 1, 2].flatMap((cycle) =>
+                  MONTHLY_SEASONAL_PRODUCE.map((m, idx) => {
+                    const globalIdx = cycle * 12 + idx;
+                    const isSelected = selectedSeasonalMonth === idx;
+                    return (
+                      <button
+                        key={`${cycle}-${m.monthName}`}
+                        ref={(el) => { monthButtonsRef.current[globalIdx] = el; }}
+                        onClick={() => setSelectedSeasonalMonth(idx)}
+                        className={`p-[4px] px-[8px] rounded text-[10px] sm:text-[11px] font-bold whitespace-nowrap transition-all shrink-0 snap-center ${
+                          isSelected
+                            ? 'bg-[#f37021] text-white shadow-xs font-black scale-105'
+                            : 'text-emerald-200 hover:bg-emerald-700/60'
+                        }`}
+                      >
+                        {m.monthName.slice(0, 3)}
+                      </button>
+                    );
+                  })
+                )}
               </div>
             </div>
 

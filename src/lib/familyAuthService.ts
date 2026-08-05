@@ -191,7 +191,7 @@ export async function getFamilyConfig(): Promise<FamilyConfig> {
     const docRef = doc(db, FAMILY_CONFIG_COLLECTION, CONFIG_DOC_ID);
     const getDocPromise = getDoc(docRef);
     const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('Timeout Firestore getDoc')), 1200)
+      setTimeout(() => reject(new Error('Timeout Firestore getDoc')), 5000)
     );
 
     const docSnap = await Promise.race([getDocPromise, timeoutPromise]);
@@ -201,7 +201,10 @@ export async function getFamilyConfig(): Promise<FamilyConfig> {
       return remoteConfig;
     }
   } catch (err) {
-    console.warn('⚡ Fallback rapido per getFamilyConfig:', err);
+    // Normal fast fallback to local cache if network/Firestore takes longer to respond
+    if (!cachedConfig) {
+      console.log('Utilizzo configurazione di default in attesa di Firestore');
+    }
   }
 
   return cachedConfig || ensureMembers(defaultFamilyConfig);
@@ -218,7 +221,7 @@ export async function saveFamilyConfig(config: FamilyConfig): Promise<void> {
       const docRef = doc(db, FAMILY_CONFIG_COLLECTION, CONFIG_DOC_ID);
       const setDocPromise = setDoc(docRef, verifiedConfig, { merge: true });
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Timeout Firestore save')), 2000)
+        setTimeout(() => reject(new Error('Timeout Firestore save')), 5000)
       );
       await Promise.race([setDocPromise, timeoutPromise]);
       console.log('✅ Configurazione profili familiari salvata su Firestore!');

@@ -38,6 +38,14 @@ export const PantryView: React.FC<PantryViewProps> = ({
   const [notes, setNotes] = useState('');
   const [matchNotification, setMatchNotification] = useState<string | null>(null);
 
+  const cleanCategory = (cat?: string): 'Frigo' | 'Dispensa' | 'Freezer' | 'Freschi' => {
+    if (!cat) return 'Frigo';
+    if (cat.includes('Freezer')) return 'Freezer';
+    if (cat.includes('Dispensa')) return 'Dispensa';
+    if (cat.includes('Freschi')) return 'Freschi';
+    return 'Frigo';
+  };
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
@@ -47,7 +55,7 @@ export const PantryView: React.FC<PantryViewProps> = ({
       name: name.trim(),
       quantity: quantity || 1,
       unit: unit.trim() || 'pz',
-      category,
+      category: cleanCategory(category),
       ...(expirationDate ? { expirationDate } : {}),
       ...(notes.trim() ? { notes: notes.trim() } : {})
     };
@@ -73,7 +81,7 @@ export const PantryView: React.FC<PantryViewProps> = ({
     setName(item.name);
     setQuantity(item.quantity);
     setUnit(item.unit);
-    setCategory(item.category || 'Frigo');
+    setCategory(cleanCategory(item.category));
     setExpirationDate(item.expirationDate || '');
     setNotes(item.notes || '');
     setShowAddForm(true);
@@ -107,16 +115,17 @@ export const PantryView: React.FC<PantryViewProps> = ({
 
   // Filtered items
   const filteredItems = pantryItems.filter((item) => {
-    const matchesCategory = activeCategory === 'Tutti' || item.category === activeCategory;
+    const itemCat = cleanCategory(item.category);
+    const matchesCategory = activeCategory === 'Tutti' || itemCat === activeCategory;
     const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (item.notes && item.notes.toLowerCase().includes(searchQuery.toLowerCase()));
     return matchesCategory && matchesSearch;
   });
 
-  const frigoCount = pantryItems.filter((i) => i.category === 'Frigo').length;
-  const dispensaCount = pantryItems.filter((i) => i.category === 'Dispensa').length;
-  const freezerCount = pantryItems.filter((i) => i.category === 'Freezer').length;
-  const freschiCount = pantryItems.filter((i) => i.category === 'Freschi').length;
+  const frigoCount = pantryItems.filter((i) => cleanCategory(i.category) === 'Frigo').length;
+  const dispensaCount = pantryItems.filter((i) => cleanCategory(i.category) === 'Dispensa').length;
+  const freezerCount = pantryItems.filter((i) => cleanCategory(i.category) === 'Freezer').length;
+  const freschiCount = pantryItems.filter((i) => cleanCategory(i.category) === 'Freschi').length;
 
   return (
     <div className="space-y-[10px]">
@@ -241,7 +250,7 @@ export const PantryView: React.FC<PantryViewProps> = ({
               >
                 <option value="Frigo">❄️ Frigorifero</option>
                 <option value="Dispensa">🥫 Dispensa</option>
-                <option value="Freezer font-bold">🧊 Freezer</option>
+                <option value="Freezer">🧊 Freezer</option>
                 <option value="Freschi">🥬 Prodotti Freschi</option>
               </select>
             </div>
@@ -381,7 +390,7 @@ export const PantryView: React.FC<PantryViewProps> = ({
                   <div className="flex items-center gap-[6px] flex-wrap">
                     <h4 className="text-sm font-extrabold text-[#191970] truncate">{item.name}</h4>
                     <span className="px-[6px] py-[2px] rounded text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
-                      {item.category || 'Frigo'}
+                      {cleanCategory(item.category)}
                     </span>
                     {item.expirationDate && (
                       <span className="flex items-center gap-[3px] text-[10px] font-bold text-amber-700 bg-amber-50 px-[6px] py-[2px] rounded border border-amber-200">
