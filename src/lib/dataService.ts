@@ -46,6 +46,21 @@ function removeDeletedRecipeId(id: string) {
   localStorage.setItem(STORAGE_KEYS.DELETED_RECIPES, JSON.stringify(Array.from(ids)));
 }
 
+// Helper to strip undefined values from objects before writing to Firestore
+function cleanData<T>(obj: T): T {
+  if (obj === null || typeof obj !== 'object') return obj;
+  if (Array.isArray(obj)) {
+    return obj.map(cleanData) as unknown as T;
+  }
+  const cleaned: any = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (value !== undefined) {
+      cleaned[key] = typeof value === 'object' && value !== null ? cleanData(value) : value;
+    }
+  }
+  return cleaned as T;
+}
+
 // Custom event to broadcast changes across components in local mode
 const LOCAL_SYNC_EVENT = 'eatiof_local_data_changed';
 
@@ -81,7 +96,7 @@ export async function seedInitialData(forceReset = false): Promise<void> {
         // Seed any missing initial recipes into Firestore
         for (const recipe of INITIAL_RECIPES) {
           if (!existingIds.has(recipe.id) || forceReset) {
-            batch.set(doc(db, 'recipes', recipe.id), recipe);
+            batch.set(doc(db, 'recipes', recipe.id), cleanData(recipe));
             needsCommit = true;
           }
         }
@@ -90,7 +105,7 @@ export async function seedInitialData(forceReset = false): Promise<void> {
         const localRecipes = getLocalRecipes();
         for (const recipe of localRecipes) {
           if (!existingIds.has(recipe.id) || forceReset) {
-            batch.set(doc(db, 'recipes', recipe.id), recipe);
+            batch.set(doc(db, 'recipes', recipe.id), cleanData(recipe));
             needsCommit = true;
           }
         }
@@ -99,7 +114,7 @@ export async function seedInitialData(forceReset = false): Promise<void> {
         const menuSnap = await getDocs(collection(db, 'weekly_menu'));
         if (menuSnap.empty || forceReset) {
           for (const menuItem of INITIAL_WEEKLY_MENU) {
-            batch.set(doc(db, 'weekly_menu', menuItem.id), menuItem);
+            batch.set(doc(db, 'weekly_menu', menuItem.id), cleanData(menuItem));
             needsCommit = true;
           }
         }
@@ -108,7 +123,7 @@ export async function seedInitialData(forceReset = false): Promise<void> {
         const shopSnap = await getDocs(collection(db, 'shopping_list'));
         if (shopSnap.empty || forceReset) {
           for (const shopItem of INITIAL_SHOPPING_LIST) {
-            batch.set(doc(db, 'shopping_list', shopItem.id), shopItem);
+            batch.set(doc(db, 'shopping_list', shopItem.id), cleanData(shopItem));
             needsCommit = true;
           }
         }
@@ -117,7 +132,7 @@ export async function seedInitialData(forceReset = false): Promise<void> {
         const pantrySnap = await getDocs(collection(db, 'pantry'));
         if (pantrySnap.empty || forceReset) {
           for (const pantryItem of INITIAL_PANTRY_ITEMS) {
-            batch.set(doc(db, 'pantry', pantryItem.id), pantryItem);
+            batch.set(doc(db, 'pantry', pantryItem.id), cleanData(pantryItem));
             needsCommit = true;
           }
         }
@@ -392,7 +407,7 @@ export async function saveRecipe(recipe: Recipe): Promise<void> {
   notifyLocalChange();
 
   if (isFirebaseConfigured && db) {
-    runFirestoreOp(setDoc(doc(db, 'recipes', recipeId), recipeToSave));
+    runFirestoreOp(setDoc(doc(db, 'recipes', recipeId), cleanData(recipeToSave)));
   }
 }
 
@@ -435,7 +450,7 @@ export async function addWeeklyMenuItem(
   notifyLocalChange();
 
   if (isFirebaseConfigured && db) {
-    runFirestoreOp(setDoc(doc(db, 'weekly_menu', slotId), menuItem));
+    runFirestoreOp(setDoc(doc(db, 'weekly_menu', slotId), cleanData(menuItem)));
   }
 }
 
@@ -522,7 +537,7 @@ export async function addManualShoppingItem(ingredientName: string, quantity: nu
   notifyLocalChange();
 
   if (isFirebaseConfigured && db) {
-    runFirestoreOp(setDoc(doc(db, 'shopping_list', newItemId), newItem));
+    runFirestoreOp(setDoc(doc(db, 'shopping_list', newItemId), cleanData(newItem)));
   }
 }
 
@@ -668,7 +683,7 @@ export async function generateShoppingListFromMenu(
 
     // Write new items
     for (const item of newShoppingList) {
-      batch.set(doc(db, 'shopping_list', item.id), item);
+      batch.set(doc(db, 'shopping_list', item.id), cleanData(item));
     }
 
     await batch.commit();
@@ -698,7 +713,7 @@ export async function savePantryItem(item: PantryItem): Promise<void> {
   notifyLocalChange();
 
   if (isFirebaseConfigured && db) {
-    runFirestoreOp(setDoc(doc(db, 'pantry', itemId), itemToSave));
+    runFirestoreOp(setDoc(doc(db, 'pantry', itemId), cleanData(itemToSave)));
   }
 }
 
@@ -736,7 +751,7 @@ export async function autoCheckPantryItemsInShoppingList(pantryItems: PantryItem
     if (isFirebaseConfigured && db) {
       const batch = writeBatch(db);
       for (const item of updatedShoppingItems) {
-        batch.set(doc(db, 'shopping_list', item.id), item);
+        batch.set(doc(db, 'shopping_list', item.id), cleanData(item));
       }
       await batch.commit();
     } else {

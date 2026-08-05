@@ -50,7 +50,7 @@ export const Header: React.FC<HeaderProps> = ({
     <header className="sticky top-0 z-40 bg-[#191970] text-white border-b border-[#191970]/80 shadow-lg">
       <div className="max-w-4xl mx-auto p-[10px]">
         {/* Top Brand & User Bar */}
-        <div className="flex items-center justify-between mb-[8px] gap-2">
+        <div className="flex items-center justify-between mb-0 md:mb-[8px] gap-2">
           <div className="flex items-center gap-[10px]">
             <EatiofLogo className="h-9 sm:h-11 w-auto" whiteTextColor={true} />
           </div>
@@ -66,8 +66,8 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
 
-        {/* Mainbar Navigation */}
-        <div className="flex items-center justify-between gap-2 p-[4px] bg-[#0d0d40] rounded-xl border border-slate-700 relative">
+        {/* Mainbar Navigation (hidden on mobile, visible on desktop) */}
+        <div className="hidden md:flex items-center justify-between gap-2 p-[4px] bg-[#0d0d40] rounded-xl border border-slate-700 relative">
           {/* Main 3 Navigation Items */}
           <div className="flex-1 grid grid-cols-3 gap-[5px]">
             {/* 1. RICETTE */}

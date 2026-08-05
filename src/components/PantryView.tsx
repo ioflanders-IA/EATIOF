@@ -48,8 +48,8 @@ export const PantryView: React.FC<PantryViewProps> = ({
       quantity: quantity || 1,
       unit: unit.trim() || 'pz',
       category,
-      expirationDate: expirationDate ? expirationDate : undefined,
-      notes: notes.trim() ? notes.trim() : undefined
+      ...(expirationDate ? { expirationDate } : {}),
+      ...(notes.trim() ? { notes: notes.trim() } : {})
     };
 
     await savePantryItem(itemToSave);

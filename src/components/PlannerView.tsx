@@ -1,15 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { Recipe, WeeklyMenuItem, DayOfWeek, MealType, CategoryType, DishCourse, NutritionInfo } from '../types';
+import { Recipe, WeeklyMenuItem, ShoppingListItem, PantryItem, DayOfWeek, MealType, CategoryType, DishCourse, NutritionInfo } from '../types';
 import { DAYS_OF_WEEK } from '../data/initialData';
 import { getFamilyConfig, FAMILY_CONFIG_CHANGED_EVENT } from '../lib/familyAuthService';
-import { MONTHLY_SEASONAL_PRODUCE, getSeasonalDataForMonth, inferCourseFromRecipe } from '../data/seasonalData';
+import { MONTHLY_SEASONAL_PRODUCE, getSeasonalDataForMonth, inferCourseFromRecipe, SeasonalItem } from '../data/seasonalData';
 import {
   addWeeklyMenuItem,
   removeWeeklyMenuItem,
   removeWeeklySlot,
   generateShoppingListFromMenu,
-  deleteRecipe
+  deleteRecipe,
+  subscribeToPantryItems,
+  saveRecipe
 } from '../lib/dataService';
+import { generate5RecipesForSeasonalItem, RecipeWithPantryCheck } from '../lib/seasonalRecipeGenerator';
 import {
   Calendar,
   Plus,
@@ -36,7 +39,8 @@ import {
   Eye,
   Pencil,
   Leaf,
-  Info
+  Info,
+  Check
 } from 'lucide-react';
 
 interface PlannerViewProps {
@@ -143,6 +147,18 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
   const [generationResult, setGenerationResult] = useState<number | null>(null);
   const [activeSubTab, setActiveSubTab] = useState<'calendar' | 'fullCalendar' | 'nutrition' | 'recipeBook'>(initialSubTab);
 
+  // Real-time Pantry state for checking available fridge ingredients
+  const [pantryItems, setPantryItems] = useState<PantryItem[]>([]);
+  const [seasonalItemFor5Recipes, setSeasonalItemFor5Recipes] = useState<SeasonalItem | null>(null);
+  const [savedRecipeIds, setSavedRecipeIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    const unsubPantry = subscribeToPantryItems((items) => {
+      setPantryItems(items);
+    });
+    return () => unsubPantry();
+  }, []);
+
   useEffect(() => {
     if (initialSubTab) {
       setActiveSubTab(initialSubTab);
@@ -209,8 +225,10 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
     const matchesSearch =
       r.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       r.ingredients.some((i) => i.name.toLowerCase().includes(searchQuery.toLowerCase()));
+    const rCourse = r.course || inferCourseFromRecipe(r.name, r.category);
+    const matchesCourse = selectedCourseFilter === 'Tutti' || rCourse === selectedCourseFilter;
     const matchesCat = selectedCategory === 'Tutte' || r.category === selectedCategory;
-    return matchesSearch && matchesCat;
+    return matchesSearch && matchesCourse && matchesCat;
   });
 
   const handleSelectRecipe = async (recipe: Recipe) => {
@@ -253,75 +271,38 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
 
   return (
     <div className="space-y-[10px]">
-      {/* Top Banner & Sub-Tabs */}
-      <div className="bg-[#191970] rounded-lg p-[10px] text-white shadow-md">
-        <div className="flex items-center justify-between gap-[10px] flex-wrap">
-          {/* Sub Navigation */}
-          <div className="flex items-center gap-[5px] flex-wrap">
-            <button
-              onClick={() => setActiveSubTab('calendar')}
-              className={`p-[5px] px-[10px] rounded-lg text-xs font-bold transition-all flex items-center gap-[5px] ${
-                activeSubTab === 'calendar'
-                  ? 'bg-[#f37021] text-white shadow-sm'
-                  : 'bg-white/10 hover:bg-white/20 text-white'
-              }`}
-            >
-              <Calendar className="w-3.5 h-3.5" />
-              <span>Vista Settimanale</span>
-            </button>
-
-            <button
-              onClick={() => setActiveSubTab('fullCalendar')}
-              className={`p-[5px] px-[10px] rounded-lg text-xs font-bold transition-all flex items-center gap-[5px] ${
-                activeSubTab === 'fullCalendar'
-                  ? 'bg-[#f37021] text-white shadow-sm'
-                  : 'bg-white/10 hover:bg-white/20 text-white'
-              }`}
-            >
-              <CalendarDays className="w-3.5 h-3.5 text-amber-300" />
-              <span>Calendario Generale Mensile</span>
-            </button>
-
-            <button
-              onClick={() => setActiveSubTab('nutrition')}
-              className={`p-[5px] px-[10px] rounded-lg text-xs font-bold transition-all flex items-center gap-[5px] ${
-                activeSubTab === 'nutrition'
-                  ? 'bg-[#f37021] text-white shadow-sm'
-                  : 'bg-white/10 hover:bg-white/20 text-white'
-              }`}
-            >
-              <BarChart2 className="w-3.5 h-3.5 text-emerald-300" />
-              <span>Valori Nutrizionali Famiglia ({familyCount}p)</span>
-            </button>
-
-            <button
-              onClick={() => setActiveSubTab('recipeBook')}
-              className={`p-[5px] px-[10px] rounded-lg text-xs font-bold transition-all flex items-center gap-[5px] ${
-                activeSubTab === 'recipeBook'
-                  ? 'bg-[#f37021] text-white shadow-sm'
-                  : 'bg-white/10 hover:bg-white/20 text-white'
-              }`}
-            >
-              <BookOpen className="w-3.5 h-3.5" />
-              <span>Ricettario ({recipes.length})</span>
-            </button>
+      {/* Header Banner & Genera Spesa Action */}
+      <div className="bg-[#191970] rounded-lg p-[10px] px-[12px] text-white shadow-md">
+        <div className="flex items-center justify-between gap-[10px]">
+          {/* Title */}
+          <div className="flex items-center gap-[8px]">
+            <Calendar className="w-4 h-4 text-[#f37021]" />
+            <h2 className="font-extrabold text-xs sm:text-sm text-white tracking-wide">
+              {activeSubTab === 'recipeBook'
+                ? 'Ricettario di Famiglia'
+                : activeSubTab === 'nutrition'
+                ? 'Valori Nutrizionali & Statistiche'
+                : 'Menu Settimanale'}
+            </h2>
           </div>
 
-          {/* Compact Genera Spesa Button on Top Right */}
-          <button
-            id="generate-shopping-list-btn"
-            onClick={handleGenerateSpesa}
-            disabled={isGenerating}
-            className="py-1.5 px-3 rounded-lg bg-[#f37021] hover:bg-[#d95d13] text-white font-bold text-xs shadow-md active:scale-95 transition-all flex items-center gap-1.5 disabled:opacity-60 ml-auto"
-            title={`Genera spesa per ${getFormattedWeekRange(weekOffset)}`}
-          >
-            <ShoppingCart className="w-3.5 h-3.5 text-white shrink-0" />
-            <span>
-              {isGenerating
-                ? 'Calcolo...'
-                : `Genera Spesa ${weekOffset === 0 ? '' : `(+${weekOffset})`}`}
-            </span>
-          </button>
+          {/* Compact Genera Spesa Button on Top Right (when in calendar mode) */}
+          {(activeSubTab === 'calendar' || activeSubTab === 'fullCalendar') && (
+            <button
+              id="generate-shopping-list-btn"
+              onClick={handleGenerateSpesa}
+              disabled={isGenerating}
+              className="py-1.5 px-3 rounded-lg bg-[#f37021] hover:bg-[#d95d13] text-white font-bold text-xs shadow-md active:scale-95 transition-all flex items-center gap-1.5 disabled:opacity-60 ml-auto"
+              title={`Genera spesa per ${getFormattedWeekRange(weekOffset)}`}
+            >
+              <ShoppingCart className="w-3.5 h-3.5 text-white shrink-0" />
+              <span>
+                {isGenerating
+                  ? 'Calcolo...'
+                  : `Genera Spesa ${weekOffset === 0 ? '' : `(+${weekOffset})`}`}
+              </span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -1120,29 +1101,29 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
           </div>
 
           {/* SEASONAL FOODS NUTRITIONAL ADVISOR WIDGET */}
-          <div className="bg-emerald-900 text-white rounded-lg p-[12px] shadow-md border border-emerald-800 space-y-[10px]">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-[8px]">
-              <div className="flex items-center gap-[8px]">
-                <div className="p-[6px] rounded-md bg-emerald-700 text-white">
+          <div className="bg-emerald-900 text-white rounded-lg p-[5px] shadow-md border border-emerald-800 space-y-[5px]">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-[5px]">
+              <div className="flex items-center gap-[5px]">
+                <div className="p-[5px] rounded-md bg-emerald-700 text-white shrink-0">
                   <Leaf className="w-5 h-5 text-emerald-300" />
                 </div>
                 <div>
-                  <h4 className="font-extrabold text-sm sm:text-base text-emerald-100 flex items-center gap-[5px]">
+                  <h4 className="font-extrabold text-xs sm:text-base text-emerald-100 flex items-center gap-[5px]">
                     Guida Alimentazione di Stagione & Ortofrutta
                   </h4>
-                  <p className="text-xs text-emerald-200">
+                  <p className="text-[11px] sm:text-xs text-emerald-200 leading-tight">
                     Scegli alimenti di stagione per un'alimentazione piu ricca di nutrienti e gusto
                   </p>
                 </div>
               </div>
 
               {/* Month Selector for Seasonality */}
-              <div className="flex items-center gap-[4px] bg-emerald-800/80 p-[4px] rounded-md border border-emerald-700 overflow-x-auto max-w-full">
+              <div className="flex items-center gap-[5px] bg-emerald-800/80 p-[5px] rounded-md border border-emerald-700 overflow-x-auto max-w-full">
                 {MONTHLY_SEASONAL_PRODUCE.map((m, idx) => (
                   <button
                     key={m.monthName}
                     onClick={() => setSelectedSeasonalMonth(idx)}
-                    className={`p-[3px] px-[8px] rounded text-[11px] font-bold whitespace-nowrap transition-all ${
+                    className={`p-[3px] px-[6px] rounded text-[10px] sm:text-[11px] font-bold whitespace-nowrap transition-all ${
                       selectedSeasonalMonth === idx
                         ? 'bg-[#f37021] text-white shadow-xs font-black'
                         : 'text-emerald-200 hover:bg-emerald-700/60'
@@ -1155,50 +1136,40 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
             </div>
 
             {/* Selected Month Produce Display */}
-            <div className="bg-emerald-950/60 rounded-lg p-[10px] border border-emerald-800 space-y-[8px]">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-bold text-emerald-300 flex items-center gap-[4px]">
+            <div className="bg-emerald-950/60 rounded-lg p-[5px] border border-emerald-800 space-y-[5px]">
+              <div className="flex items-center justify-between text-xs gap-[5px]">
+                <span className="font-bold text-emerald-300 flex items-center gap-[5px]">
                   <span>{MONTHLY_SEASONAL_PRODUCE[selectedSeasonalMonth].seasonIcon}</span>
-                  <span>Prodotti Consigliati a {MONTHLY_SEASONAL_PRODUCE[selectedSeasonalMonth].monthName} ({MONTHLY_SEASONAL_PRODUCE[selectedSeasonalMonth].season})</span>
+                  <span className="text-[11px] sm:text-xs">Prodotti Consigliati a {MONTHLY_SEASONAL_PRODUCE[selectedSeasonalMonth].monthName} ({MONTHLY_SEASONAL_PRODUCE[selectedSeasonalMonth].season})</span>
                 </span>
-                <span className="text-[10px] text-emerald-400 italic">Nutrizione Ottimale</span>
+                <span className="text-[10px] text-emerald-400 italic shrink-0">Nutrizione Ottimale</span>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-[8px]">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-[5px]">
                 {MONTHLY_SEASONAL_PRODUCE[selectedSeasonalMonth].items.map((item, idx) => (
                   <div
                     key={idx}
-                    className="bg-emerald-900/80 border border-emerald-700 hover:border-emerald-500 rounded-md p-[8px] flex flex-col justify-between space-y-[4px] transition-all"
+                    className="bg-emerald-900/80 border border-emerald-700 hover:border-emerald-500 rounded-md p-[5px] flex flex-col justify-between gap-[5px] transition-all"
                   >
-                    <div>
-                      <div className="flex items-center gap-[6px] mb-[2px]">
-                        <span className="text-lg">{item.icon}</span>
-                        <h5 className="font-extrabold text-xs text-white leading-snug">{item.name}</h5>
+                    <div className="space-y-[5px]">
+                      <div className="flex items-center gap-[5px] mb-[1px]">
+                        <span className="text-base sm:text-lg">{item.icon}</span>
+                        <h5 className="font-extrabold text-[11px] sm:text-xs text-white leading-tight">{item.name}</h5>
                       </div>
-                      <p className="text-[10px] text-emerald-200 leading-tight">{item.description}</p>
-                      <div className="mt-[4px] text-[9px] font-bold text-emerald-300 bg-emerald-950/80 p-[3px] px-[5px] rounded border border-emerald-800">
+                      <p className="text-[9px] sm:text-[10px] text-emerald-200 leading-tight">{item.description}</p>
+                      <div className="text-[8px] sm:text-[9px] font-bold text-emerald-300 bg-emerald-950/80 p-[5px] rounded border border-emerald-800">
                         ✨ {item.benefits}
                       </div>
                     </div>
 
                     <button
                       onClick={() => {
-                        onOpenRecipeModal({
-                          id: '',
-                          name: `Ricetta con ${item.name.replace(/\s*\(.*\)/, '')}`,
-                          category: 'Classica',
-                          course: 'Primi',
-                          prepTimeMinutes: 20,
-                          servings: 4,
-                          nutrition: { calories: 420, protein: 18, fat: 14, carbs: 48 },
-                          ingredients: [{ name: item.name.replace(/\s*\(.*\)/, ''), quantity: '200', unit: 'g' }],
-                          instructions: `Preparazione a base di ${item.name}...`
-                        });
+                        setSeasonalItemFor5Recipes(item);
                       }}
-                      className="mt-[6px] w-full p-[4px] bg-[#f37021] hover:bg-[#d95d13] text-white font-bold text-[10px] rounded flex items-center justify-center gap-[3px] shadow-2xs transition-colors"
+                      className="w-full p-[5px] bg-[#f37021] hover:bg-[#d95d13] text-white font-bold text-[9px] sm:text-[10px] rounded flex items-center justify-center gap-[5px] shadow-2xs transition-colors mt-[2px]"
                     >
-                      <Plus className="w-3 h-3" />
-                      <span>Crea Ricetta con {item.name.split(' ')[0]}</span>
+                      <Sparkles className="w-3.5 h-3.5 text-amber-300 shrink-0" />
+                      <span className="truncate">Genera 5 Ricette</span>
                     </button>
                   </div>
                 ))}
@@ -1363,7 +1334,7 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
             </div>
 
             {/* Modal Controls */}
-            <div className="p-[10px] border-b border-slate-100 space-y-[5px] bg-slate-50 my-[5px] rounded-md">
+            <div className="p-[10px] border-b border-slate-100 space-y-[6px] bg-slate-50 my-[5px] rounded-md">
               <div className="relative">
                 <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
                 <input
@@ -1375,14 +1346,67 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
                 />
               </div>
 
-              <div className="flex items-center gap-[5px] overflow-x-auto pb-1 scrollbar-none">
+              {/* Consigli Prodotti di Stagione per il Mese Attuale */}
+              <div className="p-[5px] bg-emerald-900 text-white rounded-md border border-emerald-700 space-y-[5px]">
+                <div className="flex items-center justify-between px-[2px]">
+                  <span className="text-[11px] font-extrabold text-emerald-200 flex items-center gap-[4px]">
+                    <Leaf className="w-3.5 h-3.5 text-emerald-300" />
+                    <span>Prodotti Consigliati a {MONTHLY_SEASONAL_PRODUCE[new Date().getMonth()].monthName}:</span>
+                  </span>
+                  <span className="text-[9px] text-emerald-300 italic">Genera 5 Ricette</span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-[5px]">
+                  {MONTHLY_SEASONAL_PRODUCE[new Date().getMonth()].items.slice(0, 6).map((item, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => setSeasonalItemFor5Recipes(item)}
+                      className="p-[5px] bg-emerald-800/90 hover:bg-[#f37021] text-white rounded border border-emerald-600 hover:border-[#f37021] transition-all flex items-center justify-between text-left gap-[4px] group"
+                    >
+                      <div className="flex items-center gap-[4px] min-w-0">
+                        <span className="text-xs shrink-0">{item.icon}</span>
+                        <span className="text-[10px] font-bold truncate">{item.name}</span>
+                      </div>
+                      <Sparkles className="w-3 h-3 text-emerald-300 group-hover:text-white shrink-0" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Portate (Antipasti, Primi, Secondi, Contorni, Dolci) */}
+              <div className="flex items-center gap-[4px] overflow-x-auto pb-1 scrollbar-none">
+                {(['Tutti', 'Antipasti', 'Primi', 'Secondi', 'Contorni', 'Dolci'] as const).map((c) => (
+                  <button
+                    key={c}
+                    onClick={() => setSelectedCourseFilter(c)}
+                    className={`p-[4px] px-[9px] rounded-full text-xs font-extrabold whitespace-nowrap transition-colors flex items-center gap-[3px] ${
+                      selectedCourseFilter === c
+                        ? 'bg-[#191970] text-white shadow-xs'
+                        : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
+                    }`}
+                  >
+                    <span>
+                      {c === 'Tutti' && '🍽️'}
+                      {c === 'Antipasti' && '🥗'}
+                      {c === 'Primi' && '🍝'}
+                      {c === 'Secondi' && '🥩'}
+                      {c === 'Contorni' && '🥬'}
+                      {c === 'Dolci' && '🍰'}
+                    </span>
+                    <span>{c}</span>
+                  </button>
+                ))}
+              </div>
+
+              {/* Categoria Tradizione (Sabina, Lazio, Classica, Altro) */}
+              <div className="flex items-center gap-[4px] overflow-x-auto pb-1 scrollbar-none pt-[2px]">
+                <span className="text-[10px] font-bold text-slate-400 shrink-0">Tradizione:</span>
                 {categories.map((cat) => (
                   <button
                     key={cat}
                     onClick={() => setSelectedCategory(cat)}
-                    className={`p-[5px] px-[10px] rounded-full text-xs font-bold whitespace-nowrap transition-colors ${
+                    className={`p-[3px] px-[8px] rounded-md text-[11px] font-bold whitespace-nowrap transition-colors ${
                       selectedCategory === cat
-                        ? 'bg-[#f37021] text-white shadow-sm'
+                        ? 'bg-[#f37021] text-white shadow-xs'
                         : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'
                     }`}
                   >
@@ -1401,6 +1425,7 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
               ) : (
                 filteredRecipes.map((recipe) => {
                   const nut = getRecipeNut(recipe);
+                  const displayCourse = recipe.course || inferCourseFromRecipe(recipe.name, recipe.category);
                   return (
                     <div
                       key={recipe.id}
@@ -1408,8 +1433,16 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
                       className="p-[10px] bg-white hover:bg-[#f37021]/10 border border-slate-200 hover:border-[#f37021] rounded-md cursor-pointer transition-all flex items-center justify-between gap-[5px] group"
                     >
                       <div className="p-[5px]">
-                        <div className="flex items-center gap-[5px] mb-[4px]">
-                          <span className="text-[10px] font-bold px-[5px] py-[2px] rounded bg-[#f37021]/10 text-[#f37021]">
+                        <div className="flex items-center gap-[4px] mb-[4px] flex-wrap">
+                          <span className="text-[10px] font-black px-[6px] py-[1px] rounded-full bg-[#191970] text-white">
+                            {displayCourse === 'Antipasti' && '🥗 '}
+                            {displayCourse === 'Primi' && '🍝 '}
+                            {displayCourse === 'Secondi' && '🥩 '}
+                            {displayCourse === 'Contorni' && '🥬 '}
+                            {displayCourse === 'Dolci' && '🍰 '}
+                            {displayCourse}
+                          </span>
+                          <span className="text-[10px] font-bold px-[5px] py-[1px] rounded bg-[#f37021]/10 text-[#f37021]">
                             {recipe.category}
                           </span>
                           {recipe.prepTimeMinutes && (
@@ -1460,6 +1493,184 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
                 Annulla
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: 5 RICETTE DI STAGIONE CON PRODOTTO & CONTROLLO FRIGO */}
+      {seasonalItemFor5Recipes && (
+        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-[10px] sm:p-[15px] animate-fade-in">
+          <div className="bg-slate-50 w-full max-w-3xl rounded-xl shadow-2xl max-h-[90vh] flex flex-col overflow-hidden border border-slate-200 p-[10px]">
+            
+            {/* Modal Header */}
+            <div className="p-[10px] bg-emerald-900 text-white rounded-lg flex items-center justify-between gap-[10px] border border-emerald-800">
+              <div className="flex items-center gap-[8px]">
+                <div className="p-[8px] bg-emerald-800 rounded-lg text-2xl shrink-0">
+                  {seasonalItemFor5Recipes.icon}
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-sm sm:text-lg flex items-center gap-[6px]">
+                    <Sparkles className="w-4 h-4 text-amber-300" />
+                    5 Ricette di Stagione con {seasonalItemFor5Recipes.name}
+                  </h3>
+                  <p className="text-[11px] text-emerald-200 leading-tight">
+                    Prodotti di stagione a {MONTHLY_SEASONAL_PRODUCE[selectedSeasonalMonth].monthName} • Verifica disponibilità in Frigo/Dispensa attiva 🟢
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSeasonalItemFor5Recipes(null)}
+                className="p-[6px] rounded-lg text-emerald-200 hover:text-white hover:bg-emerald-800 transition-colors font-bold"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Sub-header Legend */}
+            <div className="p-[8px] px-[10px] bg-white border border-slate-200 rounded-md my-[5px] flex items-center justify-between gap-[10px] text-xs flex-wrap">
+              <div className="flex items-center gap-[8px]">
+                <span className="text-slate-700 font-bold">Stato Ingredienti:</span>
+                <span className="bg-emerald-100 text-emerald-800 px-[6px] py-[2px] rounded font-extrabold flex items-center gap-[3px] text-[11px]">
+                  🟢 In Frigo
+                </span>
+                <span className="bg-amber-100 text-amber-900 px-[6px] py-[2px] rounded font-extrabold flex items-center gap-[3px] text-[11px]">
+                  🛒 Da Acquistare
+                </span>
+              </div>
+              <span className="text-[11px] text-slate-500 italic">
+                Totale prodotti nel tuo Frigo/Dispensa: {pantryItems.length}
+              </span>
+            </div>
+
+            {/* Generated Recipes List */}
+            <div className="overflow-y-auto space-y-[8px] p-[2px] flex-1">
+              {generate5RecipesForSeasonalItem(seasonalItemFor5Recipes, MONTHLY_SEASONAL_PRODUCE[selectedSeasonalMonth].monthName, pantryItems).map((item) => {
+                const isSaved = savedRecipeIds.has(item.recipe.id);
+                return (
+                  <div
+                    key={item.recipe.id}
+                    className="bg-white rounded-lg p-[10px] border border-slate-200 shadow-sm space-y-[6px]"
+                  >
+                    {/* Header */}
+                    <div className="flex items-center justify-between gap-[5px] flex-wrap">
+                      <div className="flex items-center gap-[5px] flex-wrap">
+                        <span className="text-[11px] font-black px-[8px] py-[2px] rounded-full bg-[#191970] text-white">
+                          {item.recipe.course === 'Antipasti' && '🥗 '}
+                          {item.recipe.course === 'Primi' && '🍝 '}
+                          {item.recipe.course === 'Secondi' && '🥩 '}
+                          {item.recipe.course === 'Contorni' && '🥬 '}
+                          {item.recipe.course === 'Dolci' && '🍰 '}
+                          {item.recipe.course}
+                        </span>
+                        <span className="text-[11px] font-bold px-[6px] py-[2px] rounded-full bg-[#f37021]/10 text-[#f37021] border border-[#f37021]/30">
+                          {item.recipe.category}
+                        </span>
+                        <span className="text-[11px] text-slate-500 font-medium flex items-center gap-[3px]">
+                          <Clock className="w-3 h-3 text-slate-400" />
+                          {item.recipe.prepTimeMinutes} min
+                        </span>
+                      </div>
+
+                      {/* Fridge Match Summary Badge */}
+                      <div className="flex items-center gap-[4px] text-[10px] font-extrabold">
+                        <span className="bg-emerald-100 text-emerald-800 px-[6px] py-[2px] rounded border border-emerald-200">
+                          🟢 {item.inPantryCount} in frigo
+                        </span>
+                        <span className="bg-amber-100 text-amber-900 px-[6px] py-[2px] rounded border border-amber-200">
+                          🛒 {item.toBuyCount} da acquistare
+                        </span>
+                      </div>
+                    </div>
+
+                    <h4 className="font-extrabold text-[#191970] text-base leading-snug">
+                      {item.recipe.name}
+                    </h4>
+
+                    {/* Nutrition info */}
+                    <div className="flex items-center gap-[4px] text-[10px] font-bold flex-wrap">
+                      <span className="bg-[#f37021]/15 text-[#d95d13] p-[2px] px-[5px] rounded">🔥 {item.recipe.nutrition?.calories} kcal</span>
+                      <span className="bg-blue-50 text-blue-800 p-[2px] px-[4px] rounded">P: {item.recipe.nutrition?.protein}g</span>
+                      <span className="bg-amber-50 text-amber-800 p-[2px] px-[4px] rounded">G: {item.recipe.nutrition?.fat}g</span>
+                      <span className="bg-emerald-50 text-emerald-800 p-[2px] px-[4px] rounded">C: {item.recipe.nutrition?.carbs}g</span>
+                    </div>
+
+                    {/* Ingredients with Frigo status */}
+                    <div className="space-y-[3px]">
+                      <span className="text-[11px] font-bold text-slate-600 block">
+                        Ingredienti della ricetta ({item.ingredientDetails.length}):
+                      </span>
+                      <div className="flex flex-wrap gap-[4px]">
+                        {item.ingredientDetails.map((det, iIdx) => (
+                          <span
+                            key={iIdx}
+                            className={`text-[11px] font-bold p-[3px] px-[7px] rounded-md border flex items-center gap-[3px] ${
+                              det.inPantry
+                                ? 'bg-emerald-50 text-emerald-800 border-emerald-200 shadow-2xs'
+                                : 'bg-slate-100 text-slate-700 border-slate-200'
+                            }`}
+                          >
+                            <span>{det.inPantry ? '🟢' : '🛒'}</span>
+                            <span>{det.ingredient.name} ({det.ingredient.quantity} {det.ingredient.unit})</span>
+                            {det.inPantry && (
+                              <span className="text-[9px] text-emerald-600 font-extrabold italic ml-[2px]">
+                                (In frigo)
+                              </span>
+                            )}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Action buttons */}
+                    <div className="flex items-center gap-[6px] pt-[6px] border-t border-slate-100 flex-wrap">
+                      <button
+                        onClick={async () => {
+                          await saveRecipe(item.recipe);
+                          setSavedRecipeIds((prev) => new Set(prev).add(item.recipe.id));
+                        }}
+                        disabled={isSaved}
+                        className={`p-[6px] px-[10px] rounded-md text-xs font-bold flex items-center gap-[4px] transition-colors ${
+                          isSaved
+                            ? 'bg-emerald-600 text-white cursor-default'
+                            : 'bg-[#191970] hover:bg-[#121250] text-white'
+                        }`}
+                      >
+                        {isSaved ? <Check className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
+                        <span>{isSaved ? 'Salvata nel Ricettario' : 'Salva nel Ricettario'}</span>
+                      </button>
+
+                      {selectedSlot && (
+                        <button
+                          onClick={async () => {
+                            await saveRecipe(item.recipe);
+                            await handleSelectRecipe(item.recipe);
+                            setSeasonalItemFor5Recipes(null);
+                          }}
+                          className="p-[6px] px-[10px] rounded-md bg-[#f37021] hover:bg-[#d95d13] text-white text-xs font-bold flex items-center gap-[4px] transition-colors"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span>Assegna a {selectedSlot.day} ({selectedSlot.mealType === 'lunch' ? 'Pranzo' : 'Cena'})</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-[8px] bg-slate-100 border-t border-slate-200 flex items-center justify-between rounded-lg mt-[5px]">
+              <span className="text-xs text-slate-500 font-medium">
+                Scegli e salva le ricette stagionali preferite per la tua famiglia.
+              </span>
+              <button
+                onClick={() => setSeasonalItemFor5Recipes(null)}
+                className="p-[6px] px-[12px] rounded-md bg-slate-300 hover:bg-slate-400 text-slate-800 font-bold text-xs"
+              >
+                Chiudi
+              </button>
+            </div>
+
           </div>
         </div>
       )}
