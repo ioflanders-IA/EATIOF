@@ -174,7 +174,7 @@ export async function seedInitialData(forceReset = false): Promise<void> {
           }
         }
 
-        // Seed Shopping List if empty
+        // Seed Shopping List if empty or sync local items
         const shopSnap = await getDocs(collection(db, 'shopping_list'));
         if (shopSnap.empty || forceReset) {
           for (const shopItem of INITIAL_SHOPPING_LIST) {
@@ -182,11 +182,25 @@ export async function seedInitialData(forceReset = false): Promise<void> {
             needsCommit = true;
           }
         }
+        const existingShopIds = new Set(shopSnap.docs.map((d) => d.id));
+        for (const shopItem of getLocalShoppingList()) {
+          if (shopItem && shopItem.id && (!existingShopIds.has(shopItem.id) || forceReset)) {
+            batch.set(doc(db, 'shopping_list', shopItem.id), cleanData(shopItem));
+            needsCommit = true;
+          }
+        }
 
-        // Seed Pantry if empty
+        // Seed Pantry if empty or sync local items
         const pantrySnap = await getDocs(collection(db, 'pantry'));
         if (pantrySnap.empty || forceReset) {
           for (const pantryItem of INITIAL_PANTRY_ITEMS) {
+            batch.set(doc(db, 'pantry', pantryItem.id), cleanData(pantryItem));
+            needsCommit = true;
+          }
+        }
+        const existingPantryIds = new Set(pantrySnap.docs.map((d) => d.id));
+        for (const pantryItem of getLocalPantryItems()) {
+          if (pantryItem && pantryItem.id && (!existingPantryIds.has(pantryItem.id) || forceReset)) {
             batch.set(doc(db, 'pantry', pantryItem.id), cleanData(pantryItem));
             needsCommit = true;
           }
