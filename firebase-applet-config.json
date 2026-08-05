@@ -1,0 +1,13 @@
+{
+  "projectId": "eatiof",
+  "appId": "1:1098152315777:web:a4740da41f1989d2ed3680",
+  "apiKey": "AIzaSyDqFuzRTjjlFi4Brl36yEt5T51uUf5Of34",
+  "authDomain": "eatiof.firebaseapp.com",
+  "databaseURL": "https://eatiof-default-rtdb.firebaseio.com",
+  "firestoreDatabaseId": "ai-studio-eatiofv1-d1ea1e09-f9d5-468e-8a80-ecf57ba60791",
+  "storageBucket": "eatiof.firebasestorage.app",
+  "messagingSenderId": "1098152315777",
+  "measurementId": "",
+  "oAuthClientId": "618278331579-np349g4v7msiuqak192evls3vpgtjtk6.apps.googleusercontent.com",
+  "recaptchaSiteKey": ""
+}

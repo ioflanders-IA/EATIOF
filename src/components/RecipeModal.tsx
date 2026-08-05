@@ -1,0 +1,547 @@
+import React, { useState, useEffect } from 'react';
+import { Recipe, CategoryType, Ingredient } from '../types';
+import { saveRecipe, deleteRecipe } from '../lib/dataService';
+import { ChefHat, Plus, Trash2, Clock, Users, Save, X, Sparkles, CheckCircle2 } from 'lucide-react';
+
+interface RecipeModalProps {
+  recipe?: Recipe | null;
+  onClose: () => void;
+}
+
+export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => {
+  const isEditing = !!recipe;
+
+  const [name, setName] = useState('');
+  const [category, setCategory] = useState<CategoryType>('Sabina');
+  const [prepTime, setPrepTime] = useState<number>(20);
+  const [servings, setServings] = useState<number>(4);
+  const [instructions, setInstructions] = useState('');
+  const [calories, setCalories] = useState<number>(450);
+  const [protein, setProtein] = useState<number>(20);
+  const [fat, setFat] = useState<number>(18);
+  const [carbs, setCarbs] = useState<number>(50);
+  const [ingredients, setIngredients] = useState<Ingredient[]>([
+    { name: '', quantity: '100', unit: 'g' }
+  ]);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isAutoFilling, setIsAutoFilling] = useState(false);
+  const [autoFillSuccess, setAutoFillSuccess] = useState<string | null>(null);
+  const [autoFillError, setAutoFillError] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'view' | 'edit'>(isEditing ? 'view' : 'edit');
+
+  useEffect(() => {
+    if (recipe) {
+      setName(recipe.name);
+      setCategory(recipe.category);
+      setPrepTime(recipe.prepTimeMinutes || 20);
+      setServings(recipe.servings || 4);
+      setInstructions(recipe.instructions || '');
+      setCalories(recipe.nutrition?.calories ?? 450);
+      setProtein(recipe.nutrition?.protein ?? 20);
+      setFat(recipe.nutrition?.fat ?? 18);
+      setCarbs(recipe.nutrition?.carbs ?? 50);
+      setIngredients(
+        recipe.ingredients.length > 0
+          ? [...recipe.ingredients]
+          : [{ name: '', quantity: '100', unit: 'g' }]
+      );
+    }
+  }, [recipe]);
+
+  const handleAutoFillRecipe = async (recipeNameOverride?: string) => {
+    const targetTitle = (recipeNameOverride || name).trim();
+    if (!targetTitle) return;
+
+    setIsAutoFilling(true);
+    setAutoFillError(null);
+    setAutoFillSuccess(null);
+
+    try {
+      const res = await fetch('/api/auto-fill-recipe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: targetTitle })
+      });
+
+      const result = await res.json();
+      if (!res.ok || !result.success) {
+        throw new Error(result.error || 'Errore durante la compilazione automatica.');
+      }
+
+      const data = result.data;
+      if (data) {
+        if (data.category && ['Sabina', 'Lazio', 'Classica', 'Altro'].includes(data.category)) {
+          setCategory(data.category as CategoryType);
+        }
+        if (data.prepTimeMinutes) setPrepTime(Number(data.prepTimeMinutes));
+        if (data.servings) setServings(Number(data.servings));
+        if (data.calories !== undefined) setCalories(Number(data.calories));
+        if (data.protein !== undefined) setProtein(Number(data.protein));
+        if (data.fat !== undefined) setFat(Number(data.fat));
+        if (data.carbs !== undefined) setCarbs(Number(data.carbs));
+        if (data.instructions) setInstructions(data.instructions);
+        if (Array.isArray(data.ingredients) && data.ingredients.length > 0) {
+          setIngredients(
+            data.ingredients.map((ing: any) => ({
+              name: ing.name || '',
+              quantity: ing.quantity !== undefined ? String(ing.quantity) : '100',
+              unit: ing.unit !== undefined ? String(ing.unit) : 'g'
+            }))
+          );
+        }
+        setAutoFillSuccess(`Dati, ingredienti e valori nutrizionali compilati automaticamente per "${targetTitle}"!`);
+      }
+    } catch (err: any) {
+      console.error('Errore AutoFill:', err);
+      setAutoFillError(err?.message || 'Impossibile compilare la ricetta automaticamente.');
+    } finally {
+      setIsAutoFilling(false);
+    }
+  };
+
+  const handleAddIngredientRow = () => {
+    setIngredients([...ingredients, { name: '', quantity: '100', unit: 'g' }]);
+  };
+
+  const handleRemoveIngredientRow = (index: number) => {
+    if (ingredients.length <= 1) return;
+    setIngredients(ingredients.filter((_, i) => i !== index));
+  };
+
+  const handleIngredientChange = (index: number, field: keyof Ingredient, value: any) => {
+    const updated = [...ingredients];
+    updated[index] = { ...updated[index], [field]: value };
+    setIngredients(updated);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) return;
+
+    setIsSaving(true);
+    const validIngredients = ingredients.filter((i) => i.name.trim().length > 0);
+
+    const recipeToSave: Recipe = {
+      id: recipe?.id || `recipe-${Date.now()}`,
+      name: name.trim(),
+      category,
+      prepTimeMinutes: Number(prepTime) || 20,
+      servings: Number(servings) || 4,
+      nutrition: {
+        calories: Number(calories) || 0,
+        protein: Number(protein) || 0,
+        fat: Number(fat) || 0,
+        carbs: Number(carbs) || 0
+      },
+      instructions: instructions.trim(),
+      ingredients: validIngredients.length > 0 ? validIngredients : [{ name: 'Ingredienti varî', quantity: 'q.b.', unit: '' }]
+    };
+
+    await saveRecipe(recipeToSave);
+    setIsSaving(false);
+    onClose();
+  };
+
+  const handleDelete = async () => {
+    if (recipe && confirm(`Eliminare la ricetta "${recipe.name}"?`)) {
+      await deleteRecipe(recipe.id);
+      onClose();
+    }
+  };
+
+  const categories: CategoryType[] = ['Sabina', 'Lazio', 'Classica', 'Altro'];
+
+  return (
+    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-[10px] animate-fade-in overflow-y-auto">
+      <div className="bg-white w-full max-w-2xl rounded-t-xl sm:rounded-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh] p-[10px]">
+        {/* Header */}
+        <div className="bg-[#191970] text-white p-[10px] flex items-center justify-between rounded-md">
+          <div className="flex items-center gap-[5px] p-[5px]">
+            <div className="p-[5px] rounded-md bg-[#f37021] text-white">
+              <ChefHat className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="font-extrabold text-base sm:text-lg leading-tight text-white">
+                {viewMode === 'view' ? recipe?.name : isEditing ? 'Modifica Ricetta' : 'Nuova Ricetta'}
+              </h3>
+              <p className="text-xs text-slate-300">
+                {viewMode === 'view' ? `Categoria: ${recipe?.category}` : 'Compila i dettagli del piatto'}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-[5px]">
+            {isEditing && viewMode === 'view' && (
+              <button
+                onClick={() => setViewMode('edit')}
+                className="p-[5px] px-[10px] rounded-lg bg-[#f37021] hover:bg-[#d95d13] text-white text-xs font-bold transition-colors"
+              >
+                Modifica
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="p-[5px] rounded-lg text-slate-300 hover:text-white hover:bg-white/10"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Content Body */}
+        {viewMode === 'view' && recipe ? (
+          <div className="p-[10px] overflow-y-auto space-y-[10px]">
+            <div className="flex items-center gap-[5px] flex-wrap p-[5px]">
+              <span className="p-[5px] px-[10px] rounded-full text-xs font-bold bg-[#f37021]/10 text-[#f37021] border border-[#f37021]/30">
+                {recipe.category}
+              </span>
+              {recipe.prepTimeMinutes && (
+                <span className="text-xs font-semibold text-slate-600 flex items-center gap-[5px] bg-slate-100 p-[5px] px-[10px] rounded-full">
+                  <Clock className="w-3.5 h-3.5 text-[#f37021]" />
+                  {recipe.prepTimeMinutes} Minuti
+                </span>
+              )}
+              {recipe.servings && (
+                <span className="text-xs font-semibold text-slate-600 flex items-center gap-[5px] bg-slate-100 p-[5px] px-[10px] rounded-full">
+                  <Users className="w-3.5 h-3.5 text-[#191970]" />
+                  {recipe.servings} Porzioni
+                </span>
+              )}
+            </div>
+
+            {/* Nutrition Card in View Mode */}
+            {recipe.nutrition && (
+              <div className="bg-emerald-50/70 border border-emerald-200 p-[10px] rounded-lg space-y-[5px]">
+                <h4 className="text-[11px] font-extrabold uppercase tracking-wider text-emerald-900 flex items-center justify-between">
+                  <span>Valori Nutrizionali (per porzione)</span>
+                  <span className="text-[#f37021] font-bold">🔥 {recipe.nutrition.calories} kcal</span>
+                </h4>
+                <div className="grid grid-cols-3 gap-[5px] text-center pt-[2px]">
+                  <div className="bg-white p-[5px] rounded-md border border-emerald-100 shadow-2xs">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase block">Proteine</span>
+                    <span className="text-xs font-black text-[#191970]">{recipe.nutrition.protein}g</span>
+                  </div>
+                  <div className="bg-white p-[5px] rounded-md border border-emerald-100 shadow-2xs">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase block">Grassi</span>
+                    <span className="text-xs font-black text-[#191970]">{recipe.nutrition.fat}g</span>
+                  </div>
+                  <div className="bg-white p-[5px] rounded-md border border-emerald-100 shadow-2xs">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase block">Carboidrati</span>
+                    <span className="text-xs font-black text-[#191970]">{recipe.nutrition.carbs}g</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Ingredients */}
+            <div className="bg-slate-50 p-[10px] rounded-lg border border-slate-200">
+              <h4 className="text-[11px] font-extrabold uppercase tracking-wider text-[#191970] mb-[5px] p-[5px]">
+                Ingredienti:
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-[5px] text-xs font-medium text-slate-800 p-[5px]">
+                {recipe.ingredients.map((ing, i) => (
+                  <div key={i} className="flex items-center justify-between bg-white p-[5px] px-[10px] rounded-md border border-slate-200">
+                    <span className="font-bold text-[#191970]">{ing.name}</span>
+                    <span className="text-slate-600 font-extrabold bg-slate-100 p-[2px] px-[5px] rounded">
+                      {ing.quantity} {ing.unit}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Instructions */}
+            {recipe.instructions && (
+              <div className="space-y-[5px]">
+                <h4 className="text-[11px] font-extrabold uppercase tracking-wider text-[#191970] p-[5px]">
+                  Preparazione:
+                </h4>
+                <div className="p-[10px] bg-[#f37021]/5 border border-[#f37021]/20 rounded-lg text-xs sm:text-sm text-slate-800 leading-relaxed whitespace-pre-line font-medium">
+                  {recipe.instructions}
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          /* EDIT / CREATE FORM */
+          <form onSubmit={handleSubmit} className="p-[10px] overflow-y-auto space-y-[10px] flex-1">
+            {/* Auto-Fill Feedback Banners */}
+            {isAutoFilling && (
+              <div className="bg-amber-50 border border-amber-200 p-[8px] rounded-md flex items-center gap-[8px] text-xs font-bold text-amber-900 animate-pulse">
+                <Sparkles className="w-4 h-4 text-[#f37021] animate-spin" />
+                <span>Compilazione automatica della ricetta, ingredienti e valori nutrizionali in corso con l'IA...</span>
+              </div>
+            )}
+            {autoFillSuccess && (
+              <div className="bg-emerald-50 border border-emerald-200 p-[8px] rounded-md flex items-center justify-between text-xs font-bold text-emerald-900">
+                <div className="flex items-center gap-[6px]">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                  <span>{autoFillSuccess}</span>
+                </div>
+                <button type="button" onClick={() => setAutoFillSuccess(null)} className="text-emerald-700 hover:text-emerald-900">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+            {autoFillError && (
+              <div className="bg-red-50 border border-red-200 p-[8px] rounded-md flex items-center justify-between text-xs font-bold text-red-900">
+                <span>{autoFillError}</span>
+                <button type="button" onClick={() => setAutoFillError(null)} className="text-red-700 hover:text-red-900">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-[10px]">
+              <div className="p-[5px] space-y-[5px]">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-700 block">
+                    Nome della Ricetta *
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => handleAutoFillRecipe()}
+                    disabled={isAutoFilling || !name.trim()}
+                    className="text-[10px] font-extrabold text-white bg-gradient-to-r from-[#f37021] to-amber-600 hover:from-[#d95d13] hover:to-amber-700 p-[2px] px-[8px] rounded-md shadow-xs transition-all flex items-center gap-[3px] disabled:opacity-50"
+                    title="Compila automaticamente ingredienti e valori nutrizionali con l'IA"
+                  >
+                    <Sparkles className="w-3 h-3" />
+                    <span>{isAutoFilling ? 'Compilazione...' : 'Auto-Compila'}</span>
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-[5px]">
+                  <input
+                    type="text"
+                    placeholder="es. Carbonara, Fregnacce alla Sabina, Cacio e Pepe..."
+                    value={name}
+                    onChange={(e) => {
+                      setName(e.target.value);
+                      if (autoFillSuccess) setAutoFillSuccess(null);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && e.ctrlKey) {
+                        e.preventDefault();
+                        handleAutoFillRecipe();
+                      }
+                    }}
+                    required
+                    className="flex-1 p-[5px] px-[10px] bg-white text-slate-900 placeholder-slate-400 border border-slate-300 rounded-md text-xs sm:text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-[#f37021]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleAutoFillRecipe()}
+                    disabled={isAutoFilling || !name.trim()}
+                    className="p-[6px] px-[10px] bg-[#f37021] hover:bg-[#d95d13] text-white font-extrabold text-xs rounded-md shadow-xs flex items-center gap-[4px] disabled:opacity-50 transition-colors shrink-0"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>{isAutoFilling ? 'IA...' : 'Auto-compila'}</span>
+                  </button>
+                </div>
+                <p className="text-[10px] text-slate-500 italic">
+                  Scrivi il titolo e premi "Auto-compila" per riempire automaticamente ingredienti, quantità e valori nutrizionali!
+                </p>
+              </div>
+
+              <div className="p-[5px] space-y-[5px]">
+                <label className="text-xs font-bold text-slate-700 block">
+                  Tradizione / Categoria
+                </label>
+                <select
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value as CategoryType)}
+                  className="w-full p-[5px] px-[10px] bg-white text-slate-900 border border-slate-300 rounded-md text-xs sm:text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-[#f37021]"
+                >
+                  {categories.map((c) => (
+                    <option key={c} value={c} className="text-slate-900 bg-white">{c}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-[10px]">
+              <div className="p-[5px] space-y-[5px]">
+                <label className="text-xs font-bold text-slate-700 block">
+                  Tempo Preparazione (min)
+                </label>
+                <input
+                  type="number"
+                  value={prepTime}
+                  onChange={(e) => setPrepTime(Number(e.target.value))}
+                  className="w-full p-[5px] px-[10px] bg-white text-slate-900 border border-slate-300 rounded-md text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#f37021]"
+                />
+              </div>
+
+              <div className="p-[5px] space-y-[5px]">
+                <label className="text-xs font-bold text-slate-700 block">
+                  Porzioni
+                </label>
+                <input
+                  type="number"
+                  value={servings}
+                  onChange={(e) => setServings(Number(e.target.value))}
+                  className="w-full p-[5px] px-[10px] bg-white text-slate-900 border border-slate-300 rounded-md text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#f37021]"
+                />
+              </div>
+            </div>
+
+            {/* Nutrition Inputs Section */}
+            <div className="bg-emerald-50/80 p-[10px] rounded-lg border border-emerald-200 space-y-[8px]">
+              <label className="text-[11px] font-extrabold uppercase tracking-wider text-emerald-900 block p-[2px]">
+                Valori Nutrizionali (per porzione)
+              </label>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-[8px]">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-600 block mb-1">
+                    Kilocalorie (kcal)
+                  </label>
+                  <input
+                    type="number"
+                    value={calories}
+                    onChange={(e) => setCalories(Number(e.target.value))}
+                    className="w-full p-[5px] px-[8px] bg-white text-slate-900 border border-slate-300 rounded-md text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#f37021]"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-600 block mb-1">
+                    Proteine (g)
+                  </label>
+                  <input
+                    type="number"
+                    value={protein}
+                    onChange={(e) => setProtein(Number(e.target.value))}
+                    className="w-full p-[5px] px-[8px] bg-white text-slate-900 border border-slate-300 rounded-md text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#f37021]"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-600 block mb-1">
+                    Grassi (g)
+                  </label>
+                  <input
+                    type="number"
+                    value={fat}
+                    onChange={(e) => setFat(Number(e.target.value))}
+                    className="w-full p-[5px] px-[8px] bg-white text-slate-900 border border-slate-300 rounded-md text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#f37021]"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-600 block mb-1">
+                    Carboidrati (g)
+                  </label>
+                  <input
+                    type="number"
+                    value={carbs}
+                    onChange={(e) => setCarbs(Number(e.target.value))}
+                    className="w-full p-[5px] px-[8px] bg-white text-slate-900 border border-slate-300 rounded-md text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#f37021]"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Dynamic Ingredients Section */}
+            <div className="bg-slate-50 p-[10px] rounded-lg border border-slate-200 space-y-[10px]">
+              <div className="flex items-center justify-between p-[5px]">
+                <label className="text-[11px] font-extrabold uppercase tracking-wider text-[#191970]">
+                  Ingredienti
+                </label>
+                <button
+                  type="button"
+                  onClick={handleAddIngredientRow}
+                  className="text-xs font-bold text-[#f37021] hover:underline flex items-center gap-[5px] bg-[#f37021]/10 p-[5px] px-[10px] rounded-lg"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Aggiungi Ingrediente
+                </button>
+              </div>
+
+              <div className="space-y-[5px]">
+                {ingredients.map((ing, idx) => (
+                  <div key={idx} className="flex items-center gap-[5px] p-[5px]">
+                    <input
+                      type="text"
+                      placeholder="Nome (es. Guanciale)"
+                      value={ing.name}
+                      onChange={(e) => handleIngredientChange(idx, 'name', e.target.value)}
+                      className="flex-1 p-[5px] px-[8px] bg-white text-slate-900 placeholder-slate-400 border border-slate-300 rounded-md text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#f37021]"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Qtà (150)"
+                      value={ing.quantity}
+                      onChange={(e) => handleIngredientChange(idx, 'quantity', e.target.value)}
+                      className="w-20 p-[5px] px-[8px] bg-white text-slate-900 placeholder-slate-400 border border-slate-300 rounded-md text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#f37021]"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Unità (g)"
+                      value={ing.unit}
+                      onChange={(e) => handleIngredientChange(idx, 'unit', e.target.value)}
+                      className="w-16 p-[5px] px-[8px] bg-white text-slate-900 placeholder-slate-400 border border-slate-300 rounded-md text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#f37021]"
+                    />
+                    {ingredients.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveIngredientRow(idx)}
+                        className="p-[5px] text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Instructions Textarea */}
+            <div className="p-[5px] space-y-[5px]">
+              <label className="text-xs font-bold text-slate-700 block">
+                Note o Istruzioni di Preparazione
+              </label>
+              <textarea
+                rows={4}
+                placeholder="Passaggi della ricetta..."
+                value={instructions}
+                onChange={(e) => setInstructions(e.target.value)}
+                className="w-full p-[10px] bg-white text-slate-900 placeholder-slate-400 border border-slate-300 rounded-md text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#f37021]"
+              />
+            </div>
+
+            {/* Footer Buttons */}
+            <div className="p-[5px] border-t border-slate-100 flex items-center justify-between gap-[10px]">
+              {isEditing ? (
+                <button
+                  type="button"
+                  onClick={handleDelete}
+                  className="p-[5px] px-[10px] rounded-md bg-red-50 text-red-700 hover:bg-red-100 font-bold text-xs flex items-center gap-[5px] border border-red-200"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Elimina
+                </button>
+              ) : (
+                <span />
+              )}
+
+              <div className="flex items-center gap-[5px]">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="p-[5px] px-[10px] rounded-md bg-slate-100 text-slate-700 font-bold text-xs"
+                >
+                  Annulla
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSaving}
+                  className="p-[10px] rounded-md bg-[#f37021] hover:bg-[#d95d13] text-white font-extrabold text-xs shadow-md flex items-center gap-[5px]"
+                >
+                  <Save className="w-3.5 h-3.5 text-white" />
+                  <span>{isSaving ? 'Salvataggio...' : 'Salva Ricetta'}</span>
+                </button>
+              </div>
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+};

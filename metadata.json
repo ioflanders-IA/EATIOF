@@ -1,0 +1,8 @@
+{
+  "name": "EATIOF v1",
+  "description": "Web App per la gestione dei pasti familiari: Planner settimanale, Chef di casa e Spesa intelligente con ricette della tradizione Sabina e Laziale.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
