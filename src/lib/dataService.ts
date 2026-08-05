@@ -21,9 +21,7 @@ const STORAGE_KEYS = {
   SEEDED: 'eatiof_seeded_v2',
   DELETED_RECIPES: 'eatiof_deleted_recipes_v1',
   DELETED_PANTRY: 'eatiof_deleted_pantry_v1',
-  DELETED_PANTRY_NAMES: 'eatiof_deleted_pantry_names_v1',
-  DELETED_SHOPPING: 'eatiof_deleted_shopping_v1',
-  DELETED_SHOPPING_NAMES: 'eatiof_deleted_shopping_names_v1'
+  DELETED_SHOPPING: 'eatiof_deleted_shopping_v1'
 };
 
 function getDeletedRecipeIds(): string[] {
@@ -74,32 +72,6 @@ function removeDeletedPantryId(id: string) {
   localStorage.setItem(STORAGE_KEYS.DELETED_PANTRY, JSON.stringify(Array.from(ids)));
 }
 
-function getDeletedPantryNames(): Set<string> {
-  const data = localStorage.getItem(STORAGE_KEYS.DELETED_PANTRY_NAMES);
-  if (data) {
-    try {
-      return new Set(JSON.parse(data));
-    } catch {
-      return new Set();
-    }
-  }
-  return new Set();
-}
-
-function addDeletedPantryName(name: string) {
-  if (!name) return;
-  const names = getDeletedPantryNames();
-  names.add(name.trim().toLowerCase());
-  localStorage.setItem(STORAGE_KEYS.DELETED_PANTRY_NAMES, JSON.stringify(Array.from(names)));
-}
-
-function removeDeletedPantryName(name: string) {
-  if (!name) return;
-  const names = getDeletedPantryNames();
-  names.delete(name.trim().toLowerCase());
-  localStorage.setItem(STORAGE_KEYS.DELETED_PANTRY_NAMES, JSON.stringify(Array.from(names)));
-}
-
 function getDeletedShoppingIds(): Set<string> {
   const data = localStorage.getItem(STORAGE_KEYS.DELETED_SHOPPING);
   if (data) {
@@ -122,32 +94,6 @@ function removeDeletedShoppingId(id: string) {
   const ids = getDeletedShoppingIds();
   ids.delete(id);
   localStorage.setItem(STORAGE_KEYS.DELETED_SHOPPING, JSON.stringify(Array.from(ids)));
-}
-
-function getDeletedShoppingNames(): Set<string> {
-  const data = localStorage.getItem(STORAGE_KEYS.DELETED_SHOPPING_NAMES);
-  if (data) {
-    try {
-      return new Set(JSON.parse(data));
-    } catch {
-      return new Set();
-    }
-  }
-  return new Set();
-}
-
-function addDeletedShoppingName(name: string) {
-  if (!name) return;
-  const names = getDeletedShoppingNames();
-  names.add(name.trim().toLowerCase());
-  localStorage.setItem(STORAGE_KEYS.DELETED_SHOPPING_NAMES, JSON.stringify(Array.from(names)));
-}
-
-function removeDeletedShoppingName(name: string) {
-  if (!name) return;
-  const names = getDeletedShoppingNames();
-  names.delete(name.trim().toLowerCase());
-  localStorage.setItem(STORAGE_KEYS.DELETED_SHOPPING_NAMES, JSON.stringify(Array.from(names)));
 }
 
 // Helper to strip undefined values from objects before writing to Firestore
@@ -176,6 +122,11 @@ function notifyLocalChange() {
 // SEEDING FUNCTIONALITY
 // ==========================================
 export async function seedInitialData(forceReset = false): Promise<void> {
+  // Clean up legacy deleted name blacklist items if present
+  try {
+    localStorage.removeItem('eatiof_deleted_pantry_names_v1');
+    localStorage.removeItem('eatiof_deleted_shopping_names_v1');
+  } catch {}
   // LocalStorage Seeding
   const isSeeded = localStorage.getItem(STORAGE_KEYS.SEEDED);
   if (!isSeeded || forceReset) {
@@ -360,26 +311,45 @@ export function subscribeToWeeklyMenu(callback: (menu: WeeklyMenuItem[]) => void
 }
 
 export function subscribeToShoppingList(callback: (items: ShoppingListItem[]) => void): () => void {
-  let lastFirestoreItems: ShoppingListItem[] = [];
+  let lastFirestoreItems: ShoppingListItem[] | null = null;
 
-  const emitMerged = (firestoreItems: ShoppingListItem[] = lastFirestoreItems) => {
+  const emitMerged = (firestoreItems: ShoppingListItem[] | null = lastFirestoreItems) => {
     lastFirestoreItems = firestoreItems;
     const map = new Map<string, ShoppingListItem>();
     const deletedIds = getDeletedShoppingIds();
-    const deletedNames = getDeletedShoppingNames();
 
-    const addOrUpdate = (i: ShoppingListItem) => {
-      if (!i || !i.id) return;
-      if (deletedIds.has(i.id)) return;
-      const normalizedName = i.ingredientName ? i.ingredientName.trim().toLowerCase() : '';
-      if (normalizedName && deletedNames.has(normalizedName)) return;
-      map.set(i.id, i);
-    };
+    if (firestoreItems !== null) {
+      // Remote Firestore items take primary precedence
+      firestoreItems.forEach((i) => {
+        if (!i || !i.id) return;
+        if (deletedIds.has(i.id)) return;
+        map.set(i.id, i);
+      });
 
-    // 1. Local items
-    getLocalShoppingList().forEach(addOrUpdate);
-    // 2. Firestore items
-    firestoreItems.forEach(addOrUpdate);
+      const remoteNames = new Set(
+        Array.from(map.values())
+          .map((item) => (item.ingredientName ? item.ingredientName.trim().toLowerCase() : ''))
+          .filter(Boolean)
+      );
+
+      // Local items are added only if not represented in Firestore
+      getLocalShoppingList().forEach((i) => {
+        if (!i || !i.id) return;
+        if (deletedIds.has(i.id)) return;
+        if (!map.has(i.id)) {
+          const normName = i.ingredientName ? i.ingredientName.trim().toLowerCase() : '';
+          if (!normName || !remoteNames.has(normName)) {
+            map.set(i.id, i);
+          }
+        }
+      });
+    } else {
+      getLocalShoppingList().forEach((i) => {
+        if (!i || !i.id) return;
+        if (deletedIds.has(i.id)) return;
+        map.set(i.id, i);
+      });
+    }
 
     const merged = Array.from(map.values());
     localStorage.setItem(STORAGE_KEYS.SHOPPING_LIST, JSON.stringify(merged));
@@ -419,43 +389,61 @@ export function subscribeToShoppingList(callback: (items: ShoppingListItem[]) =>
 }
 
 export function subscribeToPantryItems(callback: (items: PantryItem[]) => void): () => void {
-  let lastFirestorePantry: PantryItem[] = [];
+  let lastFirestorePantry: PantryItem[] | null = null;
 
-  const emitMerged = (firestorePantry: PantryItem[] = lastFirestorePantry) => {
+  const emitMerged = (firestorePantry: PantryItem[] | null = lastFirestorePantry) => {
     lastFirestorePantry = firestorePantry;
     const map = new Map<string, PantryItem>();
     const deletedIds = getDeletedPantryIds();
-    const deletedNames = getDeletedPantryNames();
 
-    const addOrUpdate = (item: PantryItem) => {
-      if (!item || !item.id) return;
-      if (deletedIds.has(item.id)) return;
-      const normalizedName = item.name ? item.name.trim().toLowerCase() : '';
-      if (normalizedName && deletedNames.has(normalizedName)) return;
+    if (firestorePantry !== null) {
+      // Remote Firestore items take primary precedence
+      firestorePantry.forEach((item) => {
+        if (!item || !item.id) return;
+        if (deletedIds.has(item.id)) return;
 
-      let cat = item.category;
-      if (cat && cat.includes('font-bold')) {
-        cat = cat.includes('Freezer') ? 'Freezer' : 'Frigo';
-      }
-      map.set(item.id, { ...item, category: (cat || 'Frigo') as any });
-    };
+        let cat = item.category;
+        if (cat && cat.includes('font-bold')) {
+          cat = cat.includes('Freezer') ? 'Freezer' : 'Frigo';
+        }
+        map.set(item.id, { ...item, category: (cat || 'Frigo') as any });
+      });
 
-    // 1. Local items first
-    getLocalPantryItems().forEach(addOrUpdate);
+      const remoteKeys = new Set(
+        Array.from(map.values()).map((i) => `${(i.name || '').trim().toLowerCase()}_${i.category}`)
+      );
 
-    // 2. Remote Firestore items
-    firestorePantry.forEach(addOrUpdate);
+      // Local items are added only if not represented in Firestore
+      getLocalPantryItems().forEach((item) => {
+        if (!item || !item.id) return;
+        if (deletedIds.has(item.id)) return;
+        if (!map.has(item.id)) {
+          let cat = item.category;
+          if (cat && cat.includes('font-bold')) {
+            cat = cat.includes('Freezer') ? 'Freezer' : 'Frigo';
+          }
+          const itemCat = cat || 'Frigo';
+          const normName = item.name ? item.name.trim().toLowerCase() : '';
+          const key = `${normName}_${itemCat}`;
+          if (!normName || !remoteKeys.has(key)) {
+            map.set(item.id, { ...item, category: itemCat as any });
+          }
+        }
+      });
+    } else {
+      getLocalPantryItems().forEach((item) => {
+        if (!item || !item.id) return;
+        if (deletedIds.has(item.id)) return;
 
-    // Deduplicate items with identical normalized name and category
-    const nameMap = new Map<string, PantryItem>();
-    Array.from(map.values()).forEach((item) => {
-      const key = `${item.name.trim().toLowerCase()}_${item.category}`;
-      if (!nameMap.has(key)) {
-        nameMap.set(key, item);
-      }
-    });
+        let cat = item.category;
+        if (cat && cat.includes('font-bold')) {
+          cat = cat.includes('Freezer') ? 'Freezer' : 'Frigo';
+        }
+        map.set(item.id, { ...item, category: (cat || 'Frigo') as any });
+      });
+    }
 
-    const merged = Array.from(nameMap.values());
+    const merged = Array.from(map.values());
     localStorage.setItem(STORAGE_KEYS.PANTRY, JSON.stringify(merged));
     callback(merged);
   };
@@ -734,10 +722,6 @@ export async function removeShoppingItem(itemId: string, ingredientName?: string
   const targetItem = currentItems.find((i) => i.id === itemId);
   const targetName = (ingredientName || targetItem?.ingredientName || '').trim().toLowerCase();
 
-  if (targetName) {
-    addDeletedShoppingName(targetName);
-  }
-
   const items = currentItems.filter((i) => {
     if (i.id === itemId) return false;
     if (targetName && i.ingredientName && i.ingredientName.trim().toLowerCase() === targetName) return false;
@@ -748,7 +732,11 @@ export async function removeShoppingItem(itemId: string, ingredientName?: string
   notifyLocalChange();
 
   if (isFirebaseConfigured && db) {
-    runFirestoreOp(deleteDoc(doc(db, 'shopping_list', itemId)));
+    try {
+      await deleteDoc(doc(db, 'shopping_list', itemId));
+    } catch (err) {
+      console.warn('Errore eliminazione shopping item Firestore:', err);
+    }
 
     if (targetName) {
       getDocs(collection(db, 'shopping_list')).then((snap) => {
@@ -928,9 +916,6 @@ export async function generateShoppingListFromMenu(
 export async function savePantryItem(item: PantryItem): Promise<void> {
   const itemId = item.id || `pantry-${Date.now()}`;
   removeDeletedPantryId(itemId);
-  if (item.name) {
-    removeDeletedPantryName(item.name);
-  }
   const itemToSave = { ...item, id: itemId };
 
   const targetName = item.name ? item.name.trim().toLowerCase() : '';
@@ -945,7 +930,9 @@ export async function savePantryItem(item: PantryItem): Promise<void> {
   notifyLocalChange();
 
   if (isFirebaseConfigured && db) {
-    runFirestoreOp(setDoc(doc(db, 'pantry', itemId), cleanData(itemToSave)));
+    setDoc(doc(db, 'pantry', itemId), cleanData(itemToSave)).catch((err) => {
+      console.warn('Errore salvataggio pantry in Firestore:', err);
+    });
   }
 }
 
@@ -955,10 +942,6 @@ export async function deletePantryItem(itemId: string, itemName?: string): Promi
   const currentItems = getLocalPantryItems();
   const targetItem = currentItems.find((i) => i.id === itemId);
   const targetName = (itemName || targetItem?.name || '').trim().toLowerCase();
-
-  if (targetName) {
-    addDeletedPantryName(targetName);
-  }
 
   // Filter out by ID or name
   const items = currentItems.filter((i) => {
@@ -971,24 +954,30 @@ export async function deletePantryItem(itemId: string, itemName?: string): Promi
   notifyLocalChange();
 
   if (isFirebaseConfigured && db) {
-    runFirestoreOp(deleteDoc(doc(db, 'pantry', itemId)));
+    try {
+      await deleteDoc(doc(db, 'pantry', itemId));
+    } catch (err) {
+      console.warn('Errore deleteDoc pantry Firestore:', err);
+    }
 
-    getDocs(collection(db, 'pantry')).then((snap) => {
-      const batch = writeBatch(db);
-      let hasDeletes = false;
-      snap.forEach((docSnap) => {
-        const dData = docSnap.data();
-        const dName = (dData.name || '').trim().toLowerCase();
-        if (docSnap.id === itemId || (targetName && dName === targetName)) {
-          batch.delete(docSnap.ref);
-          addDeletedPantryId(docSnap.id);
-          hasDeletes = true;
+    if (targetName) {
+      getDocs(collection(db, 'pantry')).then((snap) => {
+        const batch = writeBatch(db);
+        let hasDeletes = false;
+        snap.forEach((docSnap) => {
+          const dData = docSnap.data();
+          const dName = (dData.name || '').trim().toLowerCase();
+          if (docSnap.id === itemId || (targetName && dName === targetName)) {
+            batch.delete(docSnap.ref);
+            addDeletedPantryId(docSnap.id);
+            hasDeletes = true;
+          }
+        });
+        if (hasDeletes) {
+          batch.commit().catch(console.warn);
         }
-      });
-      if (hasDeletes) {
-        batch.commit().catch(console.warn);
-      }
-    }).catch(console.warn);
+      }).catch(console.warn);
+    }
   }
 }
 

@@ -59,16 +59,20 @@ export const ShopperView: React.FC<ShopperViewProps> = ({
     e.preventDefault();
     if (!newIngredientName.trim()) return;
 
-    await addManualShoppingItem(
-      newIngredientName.trim(),
-      newQuantity.trim() || '1',
-      newUnit.trim() || 'pz'
-    );
+    const name = newIngredientName.trim();
+    const qty = newQuantity.trim() || '1';
+    const unit = newUnit.trim() || 'pz';
 
     setNewIngredientName('');
     setNewQuantity('1');
     setNewUnit('pz');
     setShowAddForm(false);
+
+    try {
+      await addManualShoppingItem(name, qty, unit);
+    } catch (err) {
+      console.warn('Errore aggiunta elemento spesa:', err);
+    }
   };
 
   const handleClearChecked = async () => {

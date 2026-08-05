@@ -7,12 +7,14 @@ import {
   Trash2,
   Edit2,
   Search,
-  CheckCircle2,
   Sparkles,
   PackageCheck,
   Calendar,
   AlertCircle,
-  Tag
+  Grid,
+  Archive,
+  Snowflake,
+  Leaf
 } from 'lucide-react';
 
 interface PantryViewProps {
@@ -46,6 +48,22 @@ export const PantryView: React.FC<PantryViewProps> = ({
     return 'Frigo';
   };
 
+  const getCategoryBorderColor = (cat?: string) => {
+    const cleaned = cleanCategory(cat);
+    switch (cleaned) {
+      case 'Frigo':
+        return 'border-2 border-sky-500';
+      case 'Dispensa':
+        return 'border-2 border-amber-500';
+      case 'Freezer':
+        return 'border-2 border-cyan-400';
+      case 'Freschi':
+        return 'border-2 border-emerald-500';
+      default:
+        return 'border-2 border-slate-300';
+    }
+  };
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
@@ -60,9 +78,13 @@ export const PantryView: React.FC<PantryViewProps> = ({
       ...(notes.trim() ? { notes: notes.trim() } : {})
     };
 
-    await savePantryItem(itemToSave);
-
     resetForm();
+
+    try {
+      await savePantryItem(itemToSave);
+    } catch (err) {
+      console.warn('Errore durante il salvataggio:', err);
+    }
   };
 
   const resetForm = () => {
@@ -122,38 +144,30 @@ export const PantryView: React.FC<PantryViewProps> = ({
 
   const frigoCount = pantryItems.filter((i) => cleanCategory(i.category) === 'Frigo').length;
   const dispensaCount = pantryItems.filter((i) => cleanCategory(i.category) === 'Dispensa').length;
-  const freezerCount = pantryItems.filter((i) => cleanCategory(i.category) === 'Freezer').length;
-  const freschiCount = pantryItems.filter((i) => cleanCategory(i.category) === 'Freschi').length;
 
   return (
     <div className="space-y-[10px]">
       {/* Banner Frigorifero & Dispensa */}
       <div className="bg-gradient-to-r from-[#10b981] to-[#047857] rounded-lg p-[12px] text-white shadow-md">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-[10px]">
+        <div className="flex items-center justify-between gap-[10px]">
           <div>
-            <div className="flex items-center gap-[6px] mb-[4px]">
-              <span className="p-[5px] rounded-md bg-white/20 backdrop-blur-sm">
-                <Refrigerator className="w-5 h-5 text-white" />
-              </span>
-              <span className="text-xs font-extrabold uppercase tracking-wider text-emerald-100">
-                Giacenze di Casa
+            <div className="mb-[2px]">
+              <span className="text-[11px] font-extrabold uppercase tracking-wider text-emerald-100">
+                Giacenze
               </span>
             </div>
             <h2 className="text-xl sm:text-2xl font-extrabold tracking-tight text-white">
               Frigorifero & Dispensa
             </h2>
-            <p className="text-xs text-emerald-100 mt-[4px] max-w-xl leading-relaxed">
-              Cataloga gli alimenti e le scorte già presenti in casa. I dati vengono usati per confrontare e defalcare la lista della spesa.
-            </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-[6px]">
+          <div className="flex items-center gap-[4px] shrink-0">
             <button
               onClick={handleAutoCrossCheck}
-              className="p-[8px] px-[12px] rounded-md bg-white text-[#047857] font-extrabold text-xs shadow-sm hover:bg-emerald-50 active:scale-95 transition-all flex items-center gap-[6px]"
+              className="p-[6px] text-white hover:text-emerald-200 active:scale-90 transition-all"
+              title="Confronta con Spesa"
             >
-              <Sparkles className="w-4 h-4 text-[#10b981]" />
-              <span>Confronta con Spesa</span>
+              <Sparkles className="w-5 h-5" />
             </button>
 
             <button
@@ -161,16 +175,16 @@ export const PantryView: React.FC<PantryViewProps> = ({
                 if (showAddForm) resetForm();
                 else setShowAddForm(true);
               }}
-              className="p-[8px] px-[12px] rounded-md bg-[#191970] text-white font-extrabold text-xs shadow-sm hover:bg-[#0f0f4a] active:scale-95 transition-all flex items-center gap-[6px]"
+              className="p-[6px] text-white hover:text-emerald-200 active:scale-90 transition-all"
+              title={showAddForm ? 'Chiudi' : 'Nuovo Alimento'}
             >
-              <Plus className="w-4 h-4 text-[#f37021]" />
-              <span>{showAddForm ? 'Chiudi' : 'Nuovo Alimento'}</span>
+              <Plus className="w-5 h-5" />
             </button>
           </div>
         </div>
 
         {/* Categories Bar & Quick Stats */}
-        <div className="mt-[12px] pt-[10px] border-t border-white/20 flex flex-wrap items-center justify-between gap-[8px]">
+        <div className="mt-[10px] pt-[8px] border-t border-white/20 flex flex-wrap items-center justify-between gap-[8px]">
           <div className="flex items-center gap-[12px] text-xs font-bold text-white/90">
             <span>Totale: <strong className="text-white font-black">{pantryItems.length}</strong> alimenti</span>
             <span>Frigo: <strong className="text-white font-black">{frigoCount}</strong></span>
@@ -246,10 +260,10 @@ export const PantryView: React.FC<PantryViewProps> = ({
                 onChange={(e) => setCategory(e.target.value as any)}
                 className="w-full p-[6px] px-[10px] bg-slate-50 border border-slate-200 rounded-md text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#10b981]"
               >
-                <option value="Frigo">❄️ Frigorifero</option>
-                <option value="Dispensa">🥫 Dispensa</option>
-                <option value="Freezer">🧊 Freezer</option>
-                <option value="Freschi">🥬 Prodotti Freschi</option>
+                <option value="Frigo">Frigorifero</option>
+                <option value="Dispensa">Dispensa</option>
+                <option value="Freezer">Freezer</option>
+                <option value="Freschi">Prodotti Freschi</option>
               </select>
             </div>
 
@@ -324,33 +338,38 @@ export const PantryView: React.FC<PantryViewProps> = ({
       )}
 
       {/* Filter Tabs & Search Bar */}
-      <div className="bg-white rounded-lg p-[10px] border border-slate-200 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-[8px]">
-        {/* Category Filter Pills */}
-        <div className="flex flex-wrap items-center gap-[4px] w-full sm:w-auto">
-          {(['Tutti', 'Frigo', 'Dispensa', 'Freezer', 'Freschi'] as const).map((cat) => {
-            const isSelected = activeCategory === cat;
+      <div className="bg-white rounded-lg p-[8px] border border-slate-200 shadow-sm space-y-[8px]">
+        {/* Category Filter Pills - Always on one single line adapted to screen width with Lucide icons */}
+        <div className="grid grid-cols-5 gap-[4px] w-full">
+          {(
+            [
+              { id: 'Tutti', label: 'Tutti', Icon: Grid },
+              { id: 'Frigo', label: 'Frigo', Icon: Refrigerator },
+              { id: 'Dispensa', label: 'Dispensa', Icon: Archive },
+              { id: 'Freezer', label: 'Freezer', Icon: Snowflake },
+              { id: 'Freschi', label: 'Freschi', Icon: Leaf }
+            ] as const
+          ).map(({ id, label, Icon }) => {
+            const isSelected = activeCategory === id;
             return (
               <button
-                key={cat}
-                onClick={() => setActiveCategory(cat)}
-                className={`px-[10px] py-[5px] rounded-full text-xs font-bold transition-all ${
+                key={id}
+                onClick={() => setActiveCategory(id as any)}
+                className={`py-[6px] px-[2px] rounded-md text-[11px] font-bold transition-all flex items-center justify-center gap-[3px] w-full truncate ${
                   isSelected
                     ? 'bg-[#10b981] text-white shadow-sm'
                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                 }`}
               >
-                {cat === 'Frigo' && '❄️ '}
-                {cat === 'Dispensa' && '🥫 '}
-                {cat === 'Freezer' && '🧊 '}
-                {cat === 'Freschi' && '🥬 '}
-                {cat}
+                <Icon className="w-3.5 h-3.5 shrink-0" />
+                <span className="truncate">{label}</span>
               </button>
             );
           })}
         </div>
 
         {/* Search Input */}
-        <div className="relative w-full sm:w-64">
+        <div className="relative w-full">
           <Search className="w-4 h-4 text-slate-400 absolute left-[8px] top-1/2 -translate-y-1/2" />
           <input
             type="text"
@@ -362,96 +381,101 @@ export const PantryView: React.FC<PantryViewProps> = ({
         </div>
       </div>
 
-      {/* Pantry List Items */}
-      <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden divide-y divide-slate-100">
-        {filteredItems.length === 0 ? (
-          <div className="p-[20px] text-center text-slate-500 space-y-[6px]">
-            <AlertCircle className="w-8 h-8 text-slate-300 mx-auto" />
-            <p className="text-xs font-bold text-slate-700">Nessun alimento trovato in questa sezione.</p>
-            <p className="text-[11px] text-slate-400">
-              Usa il tasto "Nuovo Alimento" in alto per catalogare i cibi presenti in frigo o dispensa.
-            </p>
-          </div>
-        ) : (
-          filteredItems.map((item) => (
-            <div
-              key={item.id}
-              className="p-[10px] sm:p-[12px] flex items-center justify-between gap-[10px] hover:bg-slate-50/80 transition-colors"
-            >
-              {/* Item Info */}
-              <div className="flex items-start gap-[10px] min-w-0">
-                <span className="p-[6px] rounded-lg bg-emerald-50 text-[#10b981] border border-emerald-200 shrink-0">
-                  <Refrigerator className="w-5 h-5" />
-                </span>
+      {/* Pantry List Items - 2 items per row, 5px gap */}
+      {filteredItems.length === 0 ? (
+        <div className="bg-white rounded-lg border border-slate-200 p-[20px] text-center text-slate-500 space-y-[6px]">
+          <AlertCircle className="w-8 h-8 text-slate-300 mx-auto" />
+          <p className="text-xs font-bold text-slate-700">Nessun alimento trovato in questa sezione.</p>
+          <p className="text-[11px] text-slate-400">
+            Usa il tasto "+" in alto per catalogare i cibi presenti in frigo o dispensa.
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-[5px]">
+          {filteredItems.map((item) => {
+            const borderClass = getCategoryBorderColor(item.category);
+            const itemCatName = cleanCategory(item.category);
 
-                <div className="min-w-0">
-                  <div className="flex items-center gap-[6px] flex-wrap">
-                    <h4 className="text-sm font-extrabold text-[#191970] truncate">{item.name}</h4>
-                    <span className="px-[6px] py-[2px] rounded text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
-                      {cleanCategory(item.category)}
+            return (
+              <div
+                key={item.id}
+                className={`bg-white rounded-lg ${borderClass} p-[8px] sm:p-[10px] shadow-sm flex flex-col justify-between hover:shadow-md transition-all space-y-[8px] min-w-0`}
+              >
+                {/* Header info */}
+                <div className="min-w-0 space-y-[2px]">
+                  <div className="flex items-start justify-between gap-[4px]">
+                    <h4 className="text-xs sm:text-sm font-extrabold text-[#191970] truncate leading-tight" title={item.name}>
+                      {item.name}
+                    </h4>
+                    <span className="px-[4px] py-[1px] rounded text-[9px] font-bold bg-slate-100 text-slate-600 border border-slate-200 shrink-0">
+                      {itemCatName}
                     </span>
-                    {item.expirationDate && (
-                      <span className="flex items-center gap-[3px] text-[10px] font-bold text-amber-700 bg-amber-50 px-[6px] py-[2px] rounded border border-amber-200">
-                        <Calendar className="w-3 h-3 text-amber-600" />
-                        <span>Scade: {item.expirationDate}</span>
-                      </span>
-                    )}
                   </div>
 
-                  <p className="text-xs text-slate-600 font-bold mt-[2px]">
+                  <p className="text-[11px] text-slate-600 font-bold">
                     Giacenza: <span className="text-[#10b981] font-black">{item.quantity} {item.unit}</span>
                   </p>
 
+                  {item.expirationDate && (
+                    <p className="flex items-center gap-[3px] text-[10px] font-bold text-amber-700 bg-amber-50 px-[4px] py-[1px] rounded border border-amber-200 w-fit">
+                      <Calendar className="w-2.5 h-2.5 text-amber-600 shrink-0" />
+                      <span className="truncate">Scade: {item.expirationDate}</span>
+                    </p>
+                  )}
+
                   {item.notes && (
-                    <p className="text-[11px] text-slate-500 italic mt-[2px]">
+                    <p className="text-[10px] text-slate-500 italic truncate" title={item.notes}>
                       "{item.notes}"
                     </p>
                   )}
                 </div>
-              </div>
 
-              {/* Actions & Quantity Adjust */}
-              <div className="flex items-center gap-[6px] shrink-0">
-                <div className="flex items-center bg-slate-100 rounded-md border border-slate-200 p-[2px]">
-                  <button
-                    onClick={() => handleQuickQtyChange(item, -1)}
-                    className="w-6 h-6 flex items-center justify-center font-black text-xs text-slate-600 hover:bg-white rounded transition-colors"
-                    title="Riduci quantità"
-                  >
-                    -
-                  </button>
-                  <span className="px-[6px] text-xs font-black text-[#191970]">
-                    {item.quantity}
-                  </span>
-                  <button
-                    onClick={() => handleQuickQtyChange(item, 1)}
-                    className="w-6 h-6 flex items-center justify-center font-black text-xs text-slate-600 hover:bg-white rounded transition-colors"
-                    title="Aumenta quantità"
-                  >
-                    +
-                  </button>
+                {/* Footer Controls */}
+                <div className="flex items-center justify-between gap-[4px] pt-[4px] border-t border-slate-100">
+                  <div className="flex items-center bg-slate-100 rounded border border-slate-200 p-[1px]">
+                    <button
+                      onClick={() => handleQuickQtyChange(item, -1)}
+                      className="w-5 h-5 flex items-center justify-center font-black text-xs text-slate-600 hover:bg-white rounded transition-colors"
+                      title="Riduci quantità"
+                    >
+                      -
+                    </button>
+                    <span className="px-[4px] text-xs font-black text-[#191970]">
+                      {item.quantity}
+                    </span>
+                    <button
+                      onClick={() => handleQuickQtyChange(item, 1)}
+                      className="w-5 h-5 flex items-center justify-center font-black text-xs text-slate-600 hover:bg-white rounded transition-colors"
+                      title="Aumenta quantità"
+                    >
+                      +
+                    </button>
+                  </div>
+
+                  <div className="flex items-center gap-[2px]">
+                    <button
+                      onClick={() => handleEdit(item)}
+                      className="p-[4px] text-slate-400 hover:text-[#191970] hover:bg-slate-100 rounded transition-colors"
+                      title="Modifica"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </button>
+
+                    <button
+                      onClick={() => handleDelete(item.id, item.name)}
+                      className="p-[4px] text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                      title="Rimuovi"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
-
-                <button
-                  onClick={() => handleEdit(item)}
-                  className="p-[6px] text-slate-500 hover:text-[#191970] hover:bg-slate-100 rounded-md transition-colors"
-                  title="Modifica"
-                >
-                  <Edit2 className="w-4 h-4" />
-                </button>
-
-                <button
-                  onClick={() => handleDelete(item.id, item.name)}
-                  className="p-[6px] text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
-                  title="Rimuovi"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
               </div>
-            </div>
-          ))
-        )}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 };
+
