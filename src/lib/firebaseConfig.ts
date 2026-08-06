@@ -1,5 +1,6 @@
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { getFirestore, Firestore } from 'firebase/firestore';
+import { getDatabase, Database } from 'firebase/database';
 import { getAuth, Auth, GoogleAuthProvider, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import firebaseConfigJson from '../../firebase-applet-config.json';
 
@@ -18,6 +19,7 @@ const firebaseConfig = {
 
 let app: FirebaseApp | null = null;
 let db: Firestore | null = null;
+let rtdb: Database | null = null;
 let auth: Auth | null = null;
 const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({
@@ -29,6 +31,8 @@ let isFirebaseConfigured = false;
 if (firebaseConfig.apiKey && firebaseConfig.projectId && firebaseConfig.apiKey !== 'YOUR_API_KEY') {
   try {
     app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+
+    // 1. Initialize Firestore
     const dbId = metaEnv.VITE_FIREBASE_DATABASE_ID || (firebaseConfigJson as any).firestoreDatabaseId;
     if (dbId && dbId !== '(default)') {
       try {
@@ -42,12 +46,23 @@ if (firebaseConfig.apiKey && firebaseConfig.projectId && firebaseConfig.apiKey !
       db = getFirestore(app);
       console.log('🔥 Firestore connesso al database (default)');
     }
+
+    // 2. Initialize Realtime Database
+    if (firebaseConfig.databaseURL) {
+      try {
+        rtdb = getDatabase(app);
+        console.log('🔥 Realtime Database connesso con successo:', firebaseConfig.databaseURL);
+      } catch (e) {
+        console.warn('⚠️ Impossibile connettere Realtime Database:', e);
+      }
+    }
+
     auth = getAuth(app);
     setPersistence(auth, browserLocalPersistence).catch((err) => {
       console.warn('Persistence configuration warning:', err);
     });
     isFirebaseConfigured = true;
-    console.log('🔥 Firebase Firestore e Auth connessi con successo per il progetto:', firebaseConfig.projectId);
+    console.log('🔥 Firebase (Firestore / Realtime DB / Auth) pronto per il progetto:', firebaseConfig.projectId);
   } catch (error) {
     console.warn('⚠️ Impossibile inizializzare Firebase, utilizzo LocalStorage Fallback:', error);
   }
@@ -55,5 +70,5 @@ if (firebaseConfig.apiKey && firebaseConfig.projectId && firebaseConfig.apiKey !
   console.log('ℹ️ Firebase API Key non configurata. EATIOF funziona in modalità LocalStorage Sincronizzata.');
 }
 
-export { app, db, auth, googleProvider, isFirebaseConfigured, firebaseConfig };
+export { app, db, rtdb, auth, googleProvider, isFirebaseConfigured, firebaseConfig };
 
