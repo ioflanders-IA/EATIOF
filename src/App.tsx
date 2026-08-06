@@ -137,7 +137,7 @@ export default function App() {
       />
 
       {/* Main Content Area */}
-      <main className="max-w-4xl mx-auto px-[10px] pt-[10px]">
+      <main className="max-w-4xl mx-auto px-[5px] pt-[5px]">
         {/* Loading Spinner */}
         {isLoading ? (
           <div className="bg-white rounded-lg p-[10px] border border-slate-200 shadow-sm text-center my-4">

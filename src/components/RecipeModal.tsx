@@ -281,8 +281,8 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
 
         {/* Content Body */}
         {viewMode === 'view' && recipe ? (
-          <div className="p-[5px] overflow-y-auto space-y-[5px]">
-            <div className="flex items-center gap-[5px] flex-wrap p-[5px]">
+          <div className="overflow-y-auto space-y-[5px]">
+            <div className="flex items-center gap-[5px] flex-wrap p-[2px]">
               <span className="p-[5px] px-[10px] rounded-full text-xs font-black bg-[#191970] text-white">
                 {recipe.course || inferCourseFromRecipe(recipe.name, recipe.category)}
               </span>
@@ -358,7 +358,7 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
           </div>
         ) : (
           /* EDIT / CREATE FORM with 5px gaps and padding */
-          <form onSubmit={handleSubmit} className="p-[5px] overflow-y-auto space-y-[5px] flex-1">
+          <form onSubmit={handleSubmit} className="overflow-y-auto space-y-[5px] flex-1">
             {/* Auto-Fill / Generate Feedback Banners */}
             {(isAutoFilling || isGeneratingDish) && (
               <div className="bg-amber-50 border border-amber-200 p-[5px] px-[8px] rounded-md flex items-center gap-[6px] text-xs font-bold text-amber-900 animate-pulse">
