@@ -31,7 +31,7 @@ const STORAGE_KEYS = {
   WEEKLY_MENU: 'eatiof_weekly_menu_v1',
   SHOPPING_LIST: 'eatiof_shopping_list_v1',
   PANTRY: 'eatiof_pantry_v1',
-  SEEDED: 'eatiof_seeded_v4'
+  SEEDED: 'eatiof_seeded_v5'
 };
 
 // Helper per pulire i campi undefined prima del salvataggio in Firestore
@@ -127,7 +127,7 @@ export async function seedInitialData(forceReset = false): Promise<void> {
         await batch.commit();
         console.log('✅ Inizializzazione collezioni Firestore completata!');
       } else {
-        console.log('🔥 Connesso a Firestore. Collezioni già esistenti e pronte.');
+        console.log('🔥 Connesso a Firestore. Collezioni già pronte.');
       }
     } catch (err) {
       logFirestoreError(err, 'seedInitialData', 'shared');
@@ -151,11 +151,16 @@ export function subscribeToRecipes(callback: (recipes: Recipe[]) => void): () =>
   if (isFirebaseConfigured && db) {
     unsubFirestore = onSnapshot(
       collection(db, 'recipes'),
-      (snapshot) => {
-        if (snapshot.empty) {
-          // Se vuoto su Firestore, invia i locali e ripopola
-          callback(getLocalRecipes());
-          seedInitialData(true);
+      async (snapshot) => {
+        if (snapshot.empty && !snapshot.metadata.hasPendingWrites) {
+          console.log('🌱 Recipes Firestore vuoto: seeding...');
+          const localRecipes = getLocalRecipes();
+          const recipesToSeed = localRecipes.length > 0 ? localRecipes : INITIAL_RECIPES;
+          const batch = writeBatch(db);
+          for (const r of recipesToSeed) {
+            batch.set(doc(db, 'recipes', r.id), cleanData(r));
+          }
+          await batch.commit().catch((e) => console.warn(e));
           return;
         }
 
@@ -192,9 +197,16 @@ export function subscribeToWeeklyMenu(callback: (menu: WeeklyMenuItem[]) => void
   if (isFirebaseConfigured && db) {
     unsubFirestore = onSnapshot(
       collection(db, 'weekly_menu'),
-      (snapshot) => {
-        if (snapshot.empty) {
-          callback(getLocalWeeklyMenu());
+      async (snapshot) => {
+        if (snapshot.empty && !snapshot.metadata.hasPendingWrites) {
+          console.log('🌱 Menu Firestore vuoto: seeding...');
+          const localMenu = getLocalWeeklyMenu();
+          const menuToSeed = localMenu.length > 0 ? localMenu : INITIAL_WEEKLY_MENU;
+          const batch = writeBatch(db);
+          for (const m of menuToSeed) {
+            batch.set(doc(db, 'weekly_menu', m.id), cleanData(m));
+          }
+          await batch.commit().catch((e) => console.warn(e));
           return;
         }
 
@@ -231,9 +243,16 @@ export function subscribeToShoppingList(callback: (items: ShoppingListItem[]) =>
   if (isFirebaseConfigured && db) {
     unsubFirestore = onSnapshot(
       collection(db, 'shopping_list'),
-      (snapshot) => {
-        if (snapshot.empty) {
-          callback(getLocalShoppingList());
+      async (snapshot) => {
+        if (snapshot.empty && !snapshot.metadata.hasPendingWrites) {
+          console.log('🌱 Shopping List Firestore vuoto: seeding...');
+          const localList = getLocalShoppingList();
+          const listToSeed = localList.length > 0 ? localList : INITIAL_SHOPPING_LIST;
+          const batch = writeBatch(db);
+          for (const item of listToSeed) {
+            batch.set(doc(db, 'shopping_list', item.id), cleanData(item));
+          }
+          await batch.commit().catch((e) => console.warn(e));
           return;
         }
 
@@ -270,12 +289,16 @@ export function subscribeToPantryItems(callback: (items: PantryItem[]) => void):
   if (isFirebaseConfigured && db) {
     unsubFirestore = onSnapshot(
       collection(db, 'pantry'),
-      (snapshot) => {
-        if (snapshot.empty) {
-          // Se Firestore è vuoto, usa i locali e carica i dati iniziali su Firestore
-          console.warn('⚠️ Pantry su Firestore risulta vuota: ripopolamento in corso...');
-          callback(getLocalPantryItems());
-          seedInitialData();
+      async (snapshot) => {
+        if (snapshot.empty && !snapshot.metadata.hasPendingWrites) {
+          console.log('🌱 Pantry Firestore vuoto: seeding iniziale...');
+          const localItems = getLocalPantryItems();
+          const itemsToSeed = localItems.length > 0 ? localItems : INITIAL_PANTRY_ITEMS;
+          const batch = writeBatch(db);
+          for (const item of itemsToSeed) {
+            batch.set(doc(db, 'pantry', item.id), cleanData(item));
+          }
+          await batch.commit().catch((e) => console.warn(e));
           return;
         }
 

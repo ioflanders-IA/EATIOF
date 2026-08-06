@@ -107,7 +107,7 @@ export default function App() {
       if (unsubShopping) unsubShopping();
       if (unsubPantry) unsubPantry();
     };
-  }, [activeSession, currentUser]);
+  }, []);
 
   const handleLogout = async () => {
     await logoutFamilyUser();
