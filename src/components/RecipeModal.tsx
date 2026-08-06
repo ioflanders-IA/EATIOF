@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Recipe, CategoryType, DishCourse, Ingredient } from '../types';
 import { saveRecipe, deleteRecipe } from '../lib/dataService';
 import { getSeasonalDataForMonth, inferCourseFromRecipe } from '../data/seasonalData';
-import { ChefHat, Plus, Trash2, Clock, Users, Save, X, Sparkles, CheckCircle2, Leaf } from 'lucide-react';
+import { SeasonalIcon } from './SeasonalIcon';
+import { ChefHat, Plus, Trash2, Clock, Users, Save, X, Sparkles, CheckCircle2, Leaf, ChevronLeft } from 'lucide-react';
 
 interface RecipeModalProps {
   recipe?: Recipe | null;
@@ -175,12 +176,20 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
   const courses: DishCourse[] = ['Antipasti', 'Primi', 'Secondi', 'Contorni', 'Dolci'];
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-[10px] animate-fade-in overflow-y-auto">
-      <div className="bg-white w-full max-w-2xl rounded-t-xl sm:rounded-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh] p-[10px]">
-        {/* Header */}
-        <div className="bg-[#191970] text-white p-[10px] flex items-center justify-between rounded-md">
-          <div className="flex items-center gap-[5px] p-[5px]">
-            <div className="p-[5px] rounded-md bg-[#f37021] text-white">
+    <div className="bg-white rounded-lg border border-slate-200 shadow-md p-[10px] sm:p-[15px] space-y-[12px] min-h-[80vh] animate-fade-in">
+      {/* Header */}
+      <div className="bg-[#191970] text-white p-[10px] sm:p-[12px] flex items-center justify-between rounded-lg shadow-sm gap-[10px] flex-wrap sm:flex-nowrap">
+        <div className="flex items-center gap-[10px] flex-wrap">
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-[6px] px-[12px] rounded-lg bg-white/10 hover:bg-white/20 text-white font-bold text-xs flex items-center gap-[5px] transition-colors border border-white/20 shrink-0"
+          >
+            <ChevronLeft className="w-4 h-4" />
+            <span>Torna al Ricettario</span>
+          </button>
+          <div className="flex items-center gap-[8px]">
+            <div className="p-[6px] rounded-md bg-[#f37021] text-white shrink-0">
               <ChefHat className="w-5 h-5" />
             </div>
             <div>
@@ -188,28 +197,24 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
                 {viewMode === 'view' ? recipe?.name : isEditing ? 'Modifica Ricetta' : 'Nuova Ricetta'}
               </h3>
               <p className="text-xs text-slate-300">
-                {viewMode === 'view' ? `Portata: ${recipe?.course || 'Primo'} | Categoria: ${recipe?.category}` : 'Compila i dettagli e la portata del piatto'}
+                {viewMode === 'view' ? `Portata: ${recipe?.course || 'Primo'} | Categoria: ${recipe?.category}` : 'Compila i dettagli, ingredienti e portata del piatto'}
               </p>
             </div>
           </div>
-
-          <div className="flex items-center gap-[5px]">
-            {isEditing && viewMode === 'view' && (
-              <button
-                onClick={() => setViewMode('edit')}
-                className="p-[5px] px-[10px] rounded-lg bg-[#f37021] hover:bg-[#d95d13] text-white text-xs font-bold transition-colors"
-              >
-                Modifica
-              </button>
-            )}
-            <button
-              onClick={onClose}
-              className="p-[5px] rounded-lg text-slate-300 hover:text-white hover:bg-white/10"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
         </div>
+
+        <div className="flex items-center gap-[8px] shrink-0">
+          {isEditing && viewMode === 'view' && (
+            <button
+              type="button"
+              onClick={() => setViewMode('edit')}
+              className="p-[6px] px-[12px] rounded-lg bg-[#f37021] hover:bg-[#d95d13] text-white text-xs font-bold transition-colors shadow-2xs"
+            >
+              Modifica
+            </button>
+          )}
+        </div>
+      </div>
 
         {/* Content Body */}
         {viewMode === 'view' && recipe ? (
@@ -456,7 +461,7 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
                     title={`${item.description} - ${item.benefits}`}
                     className="text-[10px] font-bold bg-white text-emerald-900 border border-emerald-200 hover:border-emerald-500 p-[3px] px-[7px] rounded-full shadow-2xs hover:bg-emerald-100 transition-all flex items-center gap-[3px]"
                   >
-                    <span>{item.icon}</span>
+                    <SeasonalIcon icon={item.icon} className="w-3.5 h-3.5 text-[#f37021] shrink-0" />
                     <span>{item.name}</span>
                   </button>
                 ))}
@@ -619,7 +624,6 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
             </div>
           </form>
         )}
-      </div>
     </div>
   );
 };

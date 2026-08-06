@@ -125,7 +125,10 @@ export default function App() {
       {/* Sticky Top Header */}
       <Header
         activeTab={activeTab}
-        onSelectTab={setActiveTab}
+        onSelectTab={(tab) => {
+          setActiveModalRecipe(undefined);
+          setActiveTab(tab);
+        }}
         currentUser={currentUser}
         activeSession={activeSession}
         onOpenFamilyModal={() => setIsFamilyModalOpen(true)}
@@ -143,6 +146,12 @@ export default function App() {
               Caricamento menu e ricette familiari...
             </p>
           </div>
+        ) : activeModalRecipe !== undefined ? (
+          /* Dedicated Recipe Detail / Edit / Create Page */
+          <RecipeModal
+            recipe={activeModalRecipe}
+            onClose={() => setActiveModalRecipe(undefined)}
+          />
         ) : (
           /* Dynamic Active View */
           <div>
@@ -198,19 +207,14 @@ export default function App() {
       {/* Mobile Bottom Navigation Bar */}
       <BottomMainbar
         activeTab={activeTab}
-        onSelectTab={setActiveTab}
+        onSelectTab={(tab) => {
+          setActiveModalRecipe(undefined);
+          setActiveTab(tab);
+        }}
         onOpenFamilyModal={() => setIsFamilyModalOpen(true)}
         onOpenSettingsModal={() => setIsSettingsModalOpen(true)}
         onLogout={handleLogout}
       />
-
-      {/* Recipe View / Edit / Create Modal */}
-      {activeModalRecipe !== undefined && (
-        <RecipeModal
-          recipe={activeModalRecipe}
-          onClose={() => setActiveModalRecipe(undefined)}
-        />
-      )}
 
       {/* Family & Auth Admin Modal */}
       {isFamilyModalOpen && (
