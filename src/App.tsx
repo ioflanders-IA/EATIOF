@@ -75,9 +75,9 @@ export default function App() {
       setIsLoading(false);
     }, 1500);
 
-    function init() {
-      // Ensure initial demo data exists in LocalStorage and trigger background Firestore sync
-      seedInitialData();
+    async function init() {
+      // Ensure initial demo data exists in LocalStorage and Firestore
+      await seedInitialData();
 
       // Subscribe immediately to real-time streams
       unsubRecipes = subscribeToRecipes((data) => {
@@ -107,7 +107,7 @@ export default function App() {
       if (unsubShopping) unsubShopping();
       if (unsubPantry) unsubPantry();
     };
-  }, []);
+  }, [activeSession, currentUser]);
 
   const handleLogout = async () => {
     await logoutFamilyUser();

@@ -31,7 +31,7 @@ const STORAGE_KEYS = {
   WEEKLY_MENU: 'eatiof_weekly_menu_v1',
   SHOPPING_LIST: 'eatiof_shopping_list_v1',
   PANTRY: 'eatiof_pantry_v1',
-  SEEDED: 'eatiof_seeded_v3'
+  SEEDED: 'eatiof_seeded_v4'
 };
 
 // Helper per pulire i campi undefined prima del salvataggio in Firestore
@@ -62,7 +62,7 @@ function logFirestoreError(error: unknown, operation: string, path: string) {
 }
 
 // ==========================================
-// SEEDING INITIAL DATA (SHARED FAMILY COLL)
+// SEEDING INITIAL DATA (PER-COLLECTION CHECK)
 // ==========================================
 export async function seedInitialData(forceReset = false): Promise<void> {
   const isSeeded = localStorage.getItem(STORAGE_KEYS.SEEDED);
@@ -78,38 +78,56 @@ export async function seedInitialData(forceReset = false): Promise<void> {
 
   if (isFirebaseConfigured && db) {
     try {
-      const recipesCol = collection(db, 'recipes');
-      const recipesSnap = await getDocs(recipesCol);
+      const batch = writeBatch(db);
+      let needsCommit = false;
 
-      // Inserisce i dati di default solo se la collezione condivisa è completamente vuota
+      // 1. Check Pantry Collection
+      const pantrySnap = await getDocs(collection(db, 'pantry'));
+      if (pantrySnap.empty || forceReset) {
+        console.log('🌱 Popolamento Firestore: pantry...');
+        const localPantry = getLocalPantryItems();
+        const pantryToSeed = localPantry.length > 0 ? localPantry : INITIAL_PANTRY_ITEMS;
+        for (const item of pantryToSeed) {
+          batch.set(doc(db, 'pantry', item.id), cleanData(item));
+        }
+        needsCommit = true;
+      }
+
+      // 2. Check Recipes Collection
+      const recipesSnap = await getDocs(collection(db, 'recipes'));
       if (recipesSnap.empty || forceReset) {
-        console.log('🌱 Popolamento iniziale Firestore (Collezioni condivise Famiglia)...');
-        const batch = writeBatch(db);
-
-        // Seed Recipes
+        console.log('🌱 Popolamento Firestore: recipes...');
         for (const recipe of INITIAL_RECIPES) {
           batch.set(doc(db, 'recipes', recipe.id), cleanData(recipe));
         }
+        needsCommit = true;
+      }
 
-        // Seed Weekly Menu
+      // 3. Check Weekly Menu Collection
+      const menuSnap = await getDocs(collection(db, 'weekly_menu'));
+      if (menuSnap.empty || forceReset) {
+        console.log('🌱 Popolamento Firestore: weekly_menu...');
         for (const menuItem of INITIAL_WEEKLY_MENU) {
           batch.set(doc(db, 'weekly_menu', menuItem.id), cleanData(menuItem));
         }
+        needsCommit = true;
+      }
 
-        // Seed Shopping List
+      // 4. Check Shopping List Collection
+      const shopSnap = await getDocs(collection(db, 'shopping_list'));
+      if (shopSnap.empty || forceReset) {
+        console.log('🌱 Popolamento Firestore: shopping_list...');
         for (const shopItem of INITIAL_SHOPPING_LIST) {
           batch.set(doc(db, 'shopping_list', shopItem.id), cleanData(shopItem));
         }
+        needsCommit = true;
+      }
 
-        // Seed Pantry
-        for (const pantryItem of INITIAL_PANTRY_ITEMS) {
-          batch.set(doc(db, 'pantry', pantryItem.id), cleanData(pantryItem));
-        }
-
+      if (needsCommit) {
         await batch.commit();
-        console.log('✅ Firestore popolato con successo (Condiviso per la famiglia)!');
+        console.log('✅ Inizializzazione collezioni Firestore completata!');
       } else {
-        console.log('🔥 Connesso a Firestore (Collezioni condivise Famiglia). Sincronizzazione real-time attiva.');
+        console.log('🔥 Connesso a Firestore. Collezioni già esistenti e pronte.');
       }
     } catch (err) {
       logFirestoreError(err, 'seedInitialData', 'shared');
@@ -118,7 +136,7 @@ export async function seedInitialData(forceReset = false): Promise<void> {
 }
 
 // ==========================================
-// REAL-TIME SUBSCRIBERS (SHARED)
+// REAL-TIME SUBSCRIBERS (SAFE MERGE & SYNC)
 // ==========================================
 
 export function subscribeToRecipes(callback: (recipes: Recipe[]) => void): () => void {
@@ -134,6 +152,13 @@ export function subscribeToRecipes(callback: (recipes: Recipe[]) => void): () =>
     unsubFirestore = onSnapshot(
       collection(db, 'recipes'),
       (snapshot) => {
+        if (snapshot.empty) {
+          // Se vuoto su Firestore, invia i locali e ripopola
+          callback(getLocalRecipes());
+          seedInitialData(true);
+          return;
+        }
+
         const firestoreRecipes: Recipe[] = [];
         snapshot.forEach((docSnap) => {
           firestoreRecipes.push({ id: docSnap.id, ...docSnap.data() } as Recipe);
@@ -168,6 +193,11 @@ export function subscribeToWeeklyMenu(callback: (menu: WeeklyMenuItem[]) => void
     unsubFirestore = onSnapshot(
       collection(db, 'weekly_menu'),
       (snapshot) => {
+        if (snapshot.empty) {
+          callback(getLocalWeeklyMenu());
+          return;
+        }
+
         const firestoreMenu: WeeklyMenuItem[] = [];
         snapshot.forEach((docSnap) => {
           firestoreMenu.push({ id: docSnap.id, ...docSnap.data() } as WeeklyMenuItem);
@@ -202,6 +232,11 @@ export function subscribeToShoppingList(callback: (items: ShoppingListItem[]) =>
     unsubFirestore = onSnapshot(
       collection(db, 'shopping_list'),
       (snapshot) => {
+        if (snapshot.empty) {
+          callback(getLocalShoppingList());
+          return;
+        }
+
         const firestoreItems: ShoppingListItem[] = [];
         snapshot.forEach((docSnap) => {
           firestoreItems.push({ ...docSnap.data(), id: docSnap.id } as ShoppingListItem);
@@ -236,15 +271,26 @@ export function subscribeToPantryItems(callback: (items: PantryItem[]) => void):
     unsubFirestore = onSnapshot(
       collection(db, 'pantry'),
       (snapshot) => {
-        const firestorePantry: PantryItem[] = [];
+        if (snapshot.empty) {
+          // Se Firestore è vuoto, usa i locali e carica i dati iniziali su Firestore
+          console.warn('⚠️ Pantry su Firestore risulta vuota: ripopolamento in corso...');
+          callback(getLocalPantryItems());
+          seedInitialData();
+          return;
+        }
+
+        const firestorePantryMap = new Map<string, PantryItem>();
         snapshot.forEach((docSnap) => {
           const data = docSnap.data() as PantryItem;
           let cat = data.category;
           if (cat && typeof cat === 'string' && cat.includes('font-bold')) {
             cat = cat.includes('Freezer') ? 'Freezer' : 'Frigo';
           }
-          firestorePantry.push({ ...data, id: docSnap.id, category: (cat || 'Frigo') as any });
+          const item = { ...data, id: docSnap.id, category: (cat || 'Frigo') as any };
+          firestorePantryMap.set(docSnap.id, item);
         });
+
+        const firestorePantry = Array.from(firestorePantryMap.values());
         localStorage.setItem(STORAGE_KEYS.PANTRY, JSON.stringify(firestorePantry));
         callback(firestorePantry);
       },
@@ -297,6 +343,10 @@ function getLocalShoppingList(): ShoppingListItem[] {
 export function getLocalPantryItems(): PantryItem[] {
   const data = localStorage.getItem(STORAGE_KEYS.PANTRY);
   const items: PantryItem[] = data ? JSON.parse(data) : INITIAL_PANTRY_ITEMS;
+  if (!items || items.length === 0) {
+    localStorage.setItem(STORAGE_KEYS.PANTRY, JSON.stringify(INITIAL_PANTRY_ITEMS));
+    return INITIAL_PANTRY_ITEMS;
+  }
   return items.map((item) => {
     let cat = item.category;
     if (cat && typeof cat === 'string' && cat.includes('font-bold')) {
