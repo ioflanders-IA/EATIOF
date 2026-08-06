@@ -29,8 +29,14 @@ let isFirebaseConfigured = false;
 if (firebaseConfig.apiKey && firebaseConfig.projectId && firebaseConfig.apiKey !== 'YOUR_API_KEY') {
   try {
     app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-    const dbId = metaEnv.VITE_FIREBASE_DATABASE_ID || (firebaseConfigJson as any).firestoreDatabaseId;
-    db = dbId ? getFirestore(app, dbId) : getFirestore(app);
+    // Prefer explicit env var VITE_FIREBASE_DATABASE_ID, otherwise use default database
+    const dbId = metaEnv.VITE_FIREBASE_DATABASE_ID;
+    try {
+      db = dbId ? getFirestore(app, dbId) : getFirestore(app);
+    } catch (e) {
+      console.warn('Fallback a database default:', e);
+      db = getFirestore(app);
+    }
     auth = getAuth(app);
     setPersistence(auth, browserLocalPersistence).catch((err) => {
       console.warn('Persistence configuration warning:', err);

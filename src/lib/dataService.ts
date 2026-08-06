@@ -658,9 +658,12 @@ export async function savePantryItem(item: PantryItem): Promise<void> {
   notifyLocalChange();
 
   if (isFirebaseConfigured && db) {
-    setDoc(doc(db, 'pantry', itemId), cleanData(itemToSave)).catch((err) => {
-      console.warn('Errore salvataggio pantry in Firestore:', err);
-    });
+    try {
+      await setDoc(doc(db, 'pantry', itemId), cleanData(itemToSave));
+      console.log('✅ Alimento salvato con successo su Firestore:', itemId);
+    } catch (err) {
+      console.error('❌ Errore salvataggio pantry in Firestore:', err);
+    }
   }
 }
 
