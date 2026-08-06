@@ -139,6 +139,102 @@ Compila in modo realistico, accurato ed esaustivo la scheda tecnica della ricett
   }
 });
 
+// Endpoint per genera piatto a partire dagli ingredienti forniti dall'utente
+app.post('/api/generate-dish-from-ingredients', async (req, res) => {
+  try {
+    const { ingredients } = req.body;
+    let ingredientsList = '';
+    if (Array.isArray(ingredients)) {
+      ingredientsList = ingredients.map((i: any) => (typeof i === 'string' ? i : i.name)).filter(Boolean).join(', ');
+    } else if (typeof ingredients === 'string') {
+      ingredientsList = ingredients.trim();
+    }
+
+    if (!ingredientsList) {
+      return res.status(400).json({ error: 'Inserisci almeno un ingrediente per generare il piatto.' });
+    }
+
+    const ai = getGeminiClient();
+
+    const prompt = `Sei uno chef esperto della tradizione culinaria italiana, Sabina e Laziale.
+L'utente ti ha fornito la seguente lista di ingredienti a disposizione:
+"${ingredientsList}".
+
+Crea una ricetta gustosa, bilanciata ed eccezionale per 4 persone basandoti su questi ingredienti (puoi aggiungere condimenti base come olio EVO, sale, pepe, aglio o cipolla se necessari).
+
+Compila in formato JSON la scheda tecnica completa:
+1. name: titolo accattivante e preciso del piatto
+2. category: 'Sabina', 'Lazio', 'Classica', oppure 'Altro'
+3. course: esattamente uno tra 'Antipasti', 'Primi', 'Secondi', 'Contorni', 'Dolci'
+4. prepTimeMinutes: minuti totali di preparazione (numero intero)
+5. servings: 4
+6. calories: stima kcal per porzione (numero intero)
+7. protein: stima proteine per porzione in grammi (numero intero)
+8. fat: stima grassi per porzione in grammi (numero intero)
+9. carbs: stima carboidrati per porzione in grammi (numero intero)
+10. ingredients: lista di tutti gli ingredienti necessari con name, quantity, unit
+11. instructions: procedimento dettagliato e chiaro passo-passo in italiano.`;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-3.6-flash',
+      contents: prompt,
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            name: { type: Type.STRING },
+            category: { type: Type.STRING },
+            course: { type: Type.STRING },
+            prepTimeMinutes: { type: Type.INTEGER },
+            servings: { type: Type.INTEGER },
+            calories: { type: Type.INTEGER },
+            protein: { type: Type.INTEGER },
+            fat: { type: Type.INTEGER },
+            carbs: { type: Type.INTEGER },
+            ingredients: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  name: { type: Type.STRING },
+                  quantity: { type: Type.STRING },
+                  unit: { type: Type.STRING }
+                },
+                required: ['name', 'quantity', 'unit']
+              }
+            },
+            instructions: { type: Type.STRING }
+          },
+          required: [
+            'name',
+            'category',
+            'course',
+            'prepTimeMinutes',
+            'servings',
+            'calories',
+            'protein',
+            'fat',
+            'carbs',
+            'ingredients',
+            'instructions'
+          ]
+        }
+      }
+    });
+
+    const jsonText = response.text || '{}';
+    const parsed = JSON.parse(jsonText);
+
+    return res.json({ success: true, data: parsed });
+  } catch (error: any) {
+    console.error('Errore genera piatto da ingredienti con Gemini:', error);
+    return res.status(500).json({
+      error: error?.message || 'Impossibile generare la ricetta dagli ingredienti.'
+    });
+  }
+});
+
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({

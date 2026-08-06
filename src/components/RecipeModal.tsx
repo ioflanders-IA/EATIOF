@@ -3,7 +3,7 @@ import { Recipe, CategoryType, DishCourse, Ingredient } from '../types';
 import { saveRecipe, deleteRecipe } from '../lib/dataService';
 import { getSeasonalDataForMonth, inferCourseFromRecipe } from '../data/seasonalData';
 import { SeasonalIcon } from './SeasonalIcon';
-import { ChefHat, Plus, Trash2, Clock, Users, Save, X, Sparkles, CheckCircle2, Leaf, ChevronLeft } from 'lucide-react';
+import { ChefHat, Plus, Trash2, Clock, Users, Save, X, Sparkles, CheckCircle2, Leaf, ChevronLeft, Wand2 } from 'lucide-react';
 
 interface RecipeModalProps {
   recipe?: Recipe | null;
@@ -26,6 +26,8 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
   const [ingredients, setIngredients] = useState<Ingredient[]>([
     { name: '', quantity: '100', unit: 'g' }
   ]);
+  const [customIngredientsInput, setCustomIngredientsInput] = useState('');
+  const [isGeneratingDish, setIsGeneratingDish] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isAutoFilling, setIsAutoFilling] = useState(false);
   const [autoFillSuccess, setAutoFillSuccess] = useState<string | null>(null);
@@ -110,12 +112,73 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
     }
   };
 
+  const handleGenerateDishFromIngredients = async () => {
+    // Collect ingredients either from custom text input or from added ingredient rows
+    const ingredientsToUse = customIngredientsInput.trim()
+      ? customIngredientsInput.trim()
+      : ingredients.map((i) => i.name.trim()).filter(Boolean).join(', ');
+
+    if (!ingredientsToUse) {
+      setAutoFillError('Inserisci almeno un ingrediente per generare il piatto.');
+      return;
+    }
+
+    setIsGeneratingDish(true);
+    setAutoFillError(null);
+    setAutoFillSuccess(null);
+
+    try {
+      const res = await fetch('/api/generate-dish-from-ingredients', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ingredients: ingredientsToUse })
+      });
+
+      const result = await res.json();
+      if (!res.ok || !result.success) {
+        throw new Error(result.error || 'Errore durante la generazione del piatto.');
+      }
+
+      const data = result.data;
+      if (data) {
+        if (data.name) setName(data.name);
+        if (data.category && ['Sabina', 'Lazio', 'Classica', 'Altro'].includes(data.category)) {
+          setCategory(data.category as CategoryType);
+        }
+        if (data.course && ['Antipasti', 'Primi', 'Secondi', 'Contorni', 'Dolci'].includes(data.course)) {
+          setCourse(data.course as DishCourse);
+        }
+        if (data.prepTimeMinutes) setPrepTime(Number(data.prepTimeMinutes));
+        if (data.servings) setServings(Number(data.servings));
+        if (data.calories !== undefined) setCalories(Number(data.calories));
+        if (data.protein !== undefined) setProtein(Number(data.protein));
+        if (data.fat !== undefined) setFat(Number(data.fat));
+        if (data.carbs !== undefined) setCarbs(Number(data.carbs));
+        if (data.instructions) setInstructions(data.instructions);
+        if (Array.isArray(data.ingredients) && data.ingredients.length > 0) {
+          setIngredients(
+            data.ingredients.map((ing: any) => ({
+              name: ing.name || '',
+              quantity: ing.quantity !== undefined ? String(ing.quantity) : '100',
+              unit: ing.unit !== undefined ? String(ing.unit) : 'g'
+            }))
+          );
+        }
+        setAutoFillSuccess(`Piatto "${data.name}" generato con successo dai tuoi ingredienti!`);
+      }
+    } catch (err: any) {
+      console.error('Errore Genera Piatto:', err);
+      setAutoFillError(err?.message || 'Impossibile generare la ricetta dagli ingredienti.');
+    } finally {
+      setIsGeneratingDish(false);
+    }
+  };
+
   const handleAddIngredientRow = () => {
     setIngredients([...ingredients, { name: '', quantity: '100', unit: 'g' }]);
   };
 
   const handleAddSeasonalIngredient = (item: { name: string }) => {
-    // If the last ingredient is empty, replace it, otherwise append
     const cleanName = item.name.replace(/\s*\(.*\)/, '');
     const lastIng = ingredients[ingredients.length - 1];
     if (ingredients.length === 1 && !lastIng.name.trim()) {
@@ -176,39 +239,39 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
   const courses: DishCourse[] = ['Antipasti', 'Primi', 'Secondi', 'Contorni', 'Dolci'];
 
   return (
-    <div className="bg-white rounded-lg border border-slate-200 shadow-md p-[10px] sm:p-[15px] space-y-[12px] min-h-[80vh] animate-fade-in">
-      {/* Header */}
-      <div className="bg-[#191970] text-white p-[10px] sm:p-[12px] flex items-center justify-between rounded-lg shadow-sm gap-[10px] flex-wrap sm:flex-nowrap">
-        <div className="flex items-center gap-[10px] flex-wrap">
+    <div className="bg-white rounded-lg border border-slate-200 shadow-md p-[5px] space-y-[5px] min-h-[80vh] animate-fade-in">
+      {/* Header without blue background, icon orange border transparent inside */}
+      <div className="bg-white text-slate-900 p-[5px] flex items-center justify-between rounded-md border-b border-slate-200 gap-[5px] flex-wrap sm:flex-nowrap">
+        <div className="flex items-center gap-[5px] flex-wrap">
           <button
             type="button"
             onClick={onClose}
-            className="p-[6px] px-[12px] rounded-lg bg-white/10 hover:bg-white/20 text-white font-bold text-xs flex items-center gap-[5px] transition-colors border border-white/20 shrink-0"
+            className="p-[5px] px-[8px] rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center gap-[4px] border border-slate-300 transition-colors shrink-0"
           >
-            <ChevronLeft className="w-4 h-4" />
+            <ChevronLeft className="w-4 h-4 text-slate-600" />
             <span>Torna al Ricettario</span>
           </button>
-          <div className="flex items-center gap-[8px]">
-            <div className="p-[6px] rounded-md bg-[#f37021] text-white shrink-0">
-              <ChefHat className="w-5 h-5" />
+          <div className="flex items-center gap-[6px]">
+            <div className="p-[5px] rounded-md border-2 border-[#f37021] bg-transparent text-[#f37021] shrink-0 flex items-center justify-center">
+              <ChefHat className="w-5 h-5 text-[#f37021]" />
             </div>
             <div>
-              <h3 className="font-extrabold text-base sm:text-lg leading-tight text-white">
+              <h3 className="font-extrabold text-base sm:text-lg leading-tight text-[#191970]">
                 {viewMode === 'view' ? recipe?.name : isEditing ? 'Modifica Ricetta' : 'Nuova Ricetta'}
               </h3>
-              <p className="text-xs text-slate-300">
+              <p className="text-xs text-slate-500 font-semibold">
                 {viewMode === 'view' ? `Portata: ${recipe?.course || 'Primo'} | Categoria: ${recipe?.category}` : 'Compila i dettagli, ingredienti e portata del piatto'}
               </p>
             </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-[8px] shrink-0">
+        <div className="flex items-center gap-[5px] shrink-0">
           {isEditing && viewMode === 'view' && (
             <button
               type="button"
               onClick={() => setViewMode('edit')}
-              className="p-[6px] px-[12px] rounded-lg bg-[#f37021] hover:bg-[#d95d13] text-white text-xs font-bold transition-colors shadow-2xs"
+              className="p-[5px] px-[10px] rounded-md bg-[#f37021] hover:bg-[#d95d13] text-white text-xs font-bold transition-colors shadow-2xs"
             >
               Modifica
             </button>
@@ -218,7 +281,7 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
 
         {/* Content Body */}
         {viewMode === 'view' && recipe ? (
-          <div className="p-[10px] overflow-y-auto space-y-[10px]">
+          <div className="p-[5px] overflow-y-auto space-y-[5px]">
             <div className="flex items-center gap-[5px] flex-wrap p-[5px]">
               <span className="p-[5px] px-[10px] rounded-full text-xs font-black bg-[#191970] text-white">
                 {recipe.course || inferCourseFromRecipe(recipe.name, recipe.category)}
@@ -242,8 +305,8 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
 
             {/* Nutrition Card in View Mode */}
             {recipe.nutrition && (
-              <div className="bg-emerald-50/70 border border-emerald-200 p-[10px] rounded-lg space-y-[5px]">
-                <h4 className="text-[11px] font-extrabold uppercase tracking-wider text-emerald-900 flex items-center justify-between">
+              <div className="bg-emerald-50/70 border border-emerald-200 p-[5px] rounded-md space-y-[5px]">
+                <h4 className="text-[11px] font-extrabold uppercase tracking-wider text-emerald-900 flex items-center justify-between p-[2px]">
                   <span>Valori Nutrizionali (per porzione)</span>
                   <span className="text-[#f37021] font-bold">🔥 {recipe.nutrition.calories} kcal</span>
                 </h4>
@@ -265,13 +328,13 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
             )}
 
             {/* Ingredients */}
-            <div className="bg-slate-50 p-[10px] rounded-lg border border-slate-200">
-              <h4 className="text-[11px] font-extrabold uppercase tracking-wider text-[#191970] mb-[5px] p-[5px]">
+            <div className="bg-slate-50 p-[5px] rounded-md border border-slate-200 space-y-[5px]">
+              <h4 className="text-[11px] font-extrabold uppercase tracking-wider text-[#191970] p-[2px]">
                 Ingredienti:
               </h4>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-[5px] text-xs font-medium text-slate-800 p-[5px]">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-[5px] text-xs font-medium text-slate-800 p-[2px]">
                 {recipe.ingredients.map((ing, i) => (
-                  <div key={i} className="flex items-center justify-between bg-white p-[5px] px-[10px] rounded-md border border-slate-200">
+                  <div key={i} className="flex items-center justify-between bg-white p-[5px] px-[8px] rounded-md border border-slate-200">
                     <span className="font-bold text-[#191970]">{ing.name}</span>
                     <span className="text-slate-600 font-extrabold bg-slate-100 p-[2px] px-[5px] rounded">
                       {ing.quantity} {ing.unit}
@@ -284,27 +347,31 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
             {/* Instructions */}
             {recipe.instructions && (
               <div className="space-y-[5px]">
-                <h4 className="text-[11px] font-extrabold uppercase tracking-wider text-[#191970] p-[5px]">
+                <h4 className="text-[11px] font-extrabold uppercase tracking-wider text-[#191970] p-[2px]">
                   Preparazione:
                 </h4>
-                <div className="p-[10px] bg-[#f37021]/5 border border-[#f37021]/20 rounded-lg text-xs sm:text-sm text-slate-800 leading-relaxed whitespace-pre-line font-medium">
+                <div className="p-[5px] sm:p-[8px] bg-[#f37021]/5 border border-[#f37021]/20 rounded-md text-xs sm:text-sm text-slate-800 leading-relaxed whitespace-pre-line font-medium">
                   {recipe.instructions}
                 </div>
               </div>
             )}
           </div>
         ) : (
-          /* EDIT / CREATE FORM */
-          <form onSubmit={handleSubmit} className="p-[10px] overflow-y-auto space-y-[10px] flex-1">
-            {/* Auto-Fill Feedback Banners */}
-            {isAutoFilling && (
-              <div className="bg-amber-50 border border-amber-200 p-[8px] rounded-md flex items-center gap-[8px] text-xs font-bold text-amber-900 animate-pulse">
+          /* EDIT / CREATE FORM with 5px gaps and padding */
+          <form onSubmit={handleSubmit} className="p-[5px] overflow-y-auto space-y-[5px] flex-1">
+            {/* Auto-Fill / Generate Feedback Banners */}
+            {(isAutoFilling || isGeneratingDish) && (
+              <div className="bg-amber-50 border border-amber-200 p-[5px] px-[8px] rounded-md flex items-center gap-[6px] text-xs font-bold text-amber-900 animate-pulse">
                 <Sparkles className="w-4 h-4 text-[#f37021] animate-spin" />
-                <span>Compilazione automatica della ricetta, portata e valori nutrizionali in corso con l'IA...</span>
+                <span>
+                  {isGeneratingDish
+                    ? "Lo chef IA sta creando la ricetta perfetta dai tuoi ingredienti..."
+                    : "Compilazione automatica della ricetta in corso con l'IA..."}
+                </span>
               </div>
             )}
             {autoFillSuccess && (
-              <div className="bg-emerald-50 border border-emerald-200 p-[8px] rounded-md flex items-center justify-between text-xs font-bold text-emerald-900">
+              <div className="bg-emerald-50 border border-emerald-200 p-[5px] px-[8px] rounded-md flex items-center justify-between text-xs font-bold text-emerald-900">
                 <div className="flex items-center gap-[6px]">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                   <span>{autoFillSuccess}</span>
@@ -315,7 +382,7 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
               </div>
             )}
             {autoFillError && (
-              <div className="bg-red-50 border border-red-200 p-[8px] rounded-md flex items-center justify-between text-xs font-bold text-red-900">
+              <div className="bg-red-50 border border-red-200 p-[5px] px-[8px] rounded-md flex items-center justify-between text-xs font-bold text-red-900">
                 <span>{autoFillError}</span>
                 <button type="button" onClick={() => setAutoFillError(null)} className="text-red-700 hover:text-red-900">
                   <X className="w-3.5 h-3.5" />
@@ -323,36 +390,31 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
               </div>
             )}
 
-            {/* Dish Course Selector (Antipasti, Primi, Secondi, Contorni, Dolci) */}
-            <div className="p-[5px] bg-slate-50 border border-slate-200 rounded-md space-y-[4px]">
+            {/* Dish Course Selector without emojis, fitted 5 columns on one line */}
+            <div className="p-[5px] bg-slate-50 border border-slate-200 rounded-md space-y-[5px]">
               <label className="text-[11px] font-black text-[#191970] uppercase tracking-wider block">
                 Portata del Piatto *
               </label>
-              <div className="flex items-center gap-[4px] flex-wrap">
+              <div className="grid grid-cols-5 gap-[5px] w-full">
                 {courses.map((c) => (
                   <button
                     key={c}
                     type="button"
                     onClick={() => setCourse(c)}
-                    className={`p-[5px] px-[10px] rounded-md text-xs font-extrabold transition-all ${
+                    className={`p-[5px] px-[2px] rounded-md text-[10px] sm:text-xs font-extrabold text-center transition-all truncate w-full ${
                       course === c
-                        ? 'bg-[#191970] text-white shadow-xs'
+                        ? 'bg-[#191970] text-white shadow-2xs'
                         : 'bg-white text-slate-700 border border-slate-300 hover:border-[#f37021]'
                     }`}
                   >
-                    {c === 'Antipasti' && '🥗 '}
-                    {c === 'Primi' && '🍝 '}
-                    {c === 'Secondi' && '🥩 '}
-                    {c === 'Contorni' && '🥬 '}
-                    {c === 'Dolci' && '🍰 '}
                     {c}
                   </button>
                 ))}
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-[10px]">
-              <div className="p-[5px] space-y-[5px]">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-[5px]">
+              <div className="p-[5px] space-y-[5px] bg-slate-50 border border-slate-200 rounded-md">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-bold text-slate-700 block">
                     Nome della Ricetta *
@@ -361,7 +423,7 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
                     type="button"
                     onClick={() => handleAutoFillRecipe()}
                     disabled={isAutoFilling || !name.trim()}
-                    className="text-[10px] font-extrabold text-white bg-gradient-to-r from-[#f37021] to-amber-600 hover:from-[#d95d13] hover:to-amber-700 p-[2px] px-[8px] rounded-md shadow-xs transition-all flex items-center gap-[3px] disabled:opacity-50"
+                    className="text-[10px] font-extrabold text-white bg-[#f37021] hover:bg-[#d95d13] p-[2px] px-[8px] rounded-md shadow-2xs transition-all flex items-center gap-[3px] disabled:opacity-50"
                     title="Compila automaticamente la ricetta con l'IA"
                   >
                     <Sparkles className="w-3 h-3" />
@@ -387,13 +449,13 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
                       }
                     }}
                     required
-                    className="flex-1 p-[5px] px-[10px] bg-white text-slate-900 placeholder-slate-400 border border-slate-300 rounded-md text-xs sm:text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-[#f37021]"
+                    className="flex-1 p-[5px] px-[8px] bg-white text-slate-900 placeholder-slate-400 border border-slate-300 rounded-md text-xs sm:text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-[#f37021]"
                   />
                   <button
                     type="button"
                     onClick={() => handleAutoFillRecipe()}
                     disabled={isAutoFilling || !name.trim()}
-                    className="p-[6px] px-[10px] bg-[#f37021] hover:bg-[#d95d13] text-white font-extrabold text-xs rounded-md shadow-xs flex items-center gap-[4px] disabled:opacity-50 transition-colors shrink-0"
+                    className="p-[5px] px-[8px] bg-[#f37021] hover:bg-[#d95d13] text-white font-extrabold text-xs rounded-md shadow-2xs flex items-center gap-[4px] disabled:opacity-50 transition-colors shrink-0"
                   >
                     <Sparkles className="w-3.5 h-3.5" />
                     <span>{isAutoFilling ? 'IA...' : 'Auto-compila'}</span>
@@ -401,14 +463,14 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
                 </div>
               </div>
 
-              <div className="p-[5px] space-y-[5px]">
+              <div className="p-[5px] space-y-[5px] bg-slate-50 border border-slate-200 rounded-md">
                 <label className="text-xs font-bold text-slate-700 block">
                   Tradizione Culinaria
                 </label>
                 <select
                   value={category}
                   onChange={(e) => setCategory(e.target.value as CategoryType)}
-                  className="w-full p-[5px] px-[10px] bg-white text-slate-900 border border-slate-300 rounded-md text-xs sm:text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-[#f37021]"
+                  className="w-full p-[5px] px-[8px] bg-white text-slate-900 border border-slate-300 rounded-md text-xs sm:text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-[#f37021]"
                 >
                   {categories.map((c) => (
                     <option key={c} value={c} className="text-slate-900 bg-white">{c}</option>
@@ -417,8 +479,8 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-[10px]">
-              <div className="p-[5px] space-y-[5px]">
+            <div className="grid grid-cols-2 gap-[5px]">
+              <div className="p-[5px] space-y-[5px] bg-slate-50 border border-slate-200 rounded-md">
                 <label className="text-xs font-bold text-slate-700 block">
                   Tempo Preparazione (min)
                 </label>
@@ -426,11 +488,11 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
                   type="number"
                   value={prepTime}
                   onChange={(e) => setPrepTime(Number(e.target.value))}
-                  className="w-full p-[5px] px-[10px] bg-white text-slate-900 border border-slate-300 rounded-md text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#f37021]"
+                  className="w-full p-[5px] px-[8px] bg-white text-slate-900 border border-slate-300 rounded-md text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#f37021]"
                 />
               </div>
 
-              <div className="p-[5px] space-y-[5px]">
+              <div className="p-[5px] space-y-[5px] bg-slate-50 border border-slate-200 rounded-md">
                 <label className="text-xs font-bold text-slate-700 block">
                   Porzioni
                 </label>
@@ -438,13 +500,13 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
                   type="number"
                   value={servings}
                   onChange={(e) => setServings(Number(e.target.value))}
-                  className="w-full p-[5px] px-[10px] bg-white text-slate-900 border border-slate-300 rounded-md text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#f37021]"
+                  className="w-full p-[5px] px-[8px] bg-white text-slate-900 border border-slate-300 rounded-md text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#f37021]"
                 />
               </div>
             </div>
 
             {/* Seasonal Produce Suggestion Box for adding ingredients */}
-            <div className="bg-emerald-50/90 border border-emerald-300 p-[8px] rounded-lg space-y-[4px]">
+            <div className="bg-emerald-50/90 border border-emerald-300 p-[5px] rounded-md space-y-[5px]">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-black text-emerald-900 flex items-center gap-[4px]">
                   <Leaf className="w-3.5 h-3.5 text-emerald-600" />
@@ -452,7 +514,7 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
                 </span>
                 <span className="text-[10px] text-emerald-700 font-bold">Clicca per aggiungere agli ingredienti!</span>
               </div>
-              <div className="flex items-center gap-[4px] flex-wrap pt-[2px]">
+              <div className="flex items-center gap-[5px] flex-wrap pt-[2px]">
                 {currentMonthData.items.map((item, idx) => (
                   <button
                     key={idx}
@@ -469,11 +531,11 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
             </div>
 
             {/* Nutrition Inputs Section */}
-            <div className="bg-slate-50 p-[10px] rounded-lg border border-slate-200 space-y-[8px]">
+            <div className="bg-slate-50 p-[5px] rounded-md border border-slate-200 space-y-[5px]">
               <label className="text-[11px] font-extrabold uppercase tracking-wider text-[#191970] block p-[2px]">
                 Valori Nutrizionali (per porzione)
               </label>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-[8px]">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-[5px]">
                 <div>
                   <label className="text-[10px] font-bold text-slate-600 block mb-1">
                     Kilocalorie (kcal)
@@ -522,15 +584,15 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
             </div>
 
             {/* Dynamic Ingredients Section */}
-            <div className="bg-slate-50 p-[10px] rounded-lg border border-slate-200 space-y-[10px]">
-              <div className="flex items-center justify-between p-[5px]">
+            <div className="bg-slate-50 p-[5px] rounded-md border border-slate-200 space-y-[5px]">
+              <div className="flex items-center justify-between p-[2px]">
                 <label className="text-[11px] font-extrabold uppercase tracking-wider text-[#191970]">
                   Ingredienti
                 </label>
                 <button
                   type="button"
                   onClick={handleAddIngredientRow}
-                  className="text-xs font-bold text-[#f37021] hover:underline flex items-center gap-[5px] bg-[#f37021]/10 p-[5px] px-[10px] rounded-lg"
+                  className="text-xs font-bold text-[#f37021] hover:underline flex items-center gap-[4px] bg-[#f37021]/10 p-[4px] px-[8px] rounded-md"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   Aggiungi Ingrediente
@@ -539,7 +601,7 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
 
               <div className="space-y-[5px]">
                 {ingredients.map((ing, idx) => (
-                  <div key={idx} className="flex items-center gap-[5px] p-[5px]">
+                  <div key={idx} className="flex items-center gap-[5px]">
                     <input
                       type="text"
                       placeholder="Nome (es. Guanciale)"
@@ -576,21 +638,63 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
             </div>
 
             {/* Instructions Textarea */}
-            <div className="p-[5px] space-y-[5px]">
+            <div className="p-[5px] space-y-[5px] bg-slate-50 border border-slate-200 rounded-md">
               <label className="text-xs font-bold text-slate-700 block">
                 Note o Istruzioni di Preparazione
               </label>
               <textarea
-                rows={4}
+                rows={3}
                 placeholder="Passaggi della ricetta..."
                 value={instructions}
                 onChange={(e) => setInstructions(e.target.value)}
-                className="w-full p-[10px] bg-white text-[#191970] placeholder-slate-400 border border-slate-300 rounded-md text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#f37021]"
+                className="w-full p-[5px] px-[8px] bg-white text-[#191970] placeholder-slate-400 border border-slate-300 rounded-md text-xs sm:text-sm font-medium focus:outline-none focus:ring-1 focus:ring-[#f37021]"
               />
             </div>
 
+            {/* Genera Piatto dagli Ingredienti (At the bottom of the form) */}
+            <div className="p-[5px] bg-amber-50/80 border-2 border-[#f37021]/50 rounded-md space-y-[5px]">
+              <div className="flex items-center gap-[5px]">
+                <div className="p-[3px] rounded border border-[#f37021] bg-transparent text-[#f37021] shrink-0">
+                  <ChefHat className="w-4 h-4 text-[#f37021]" />
+                </div>
+                <div>
+                  <span className="text-xs font-black text-[#191970] uppercase tracking-wider block">
+                    Genera Piatto dagli Ingredienti
+                  </span>
+                  <p className="text-[10px] text-slate-600 font-semibold">
+                    Inserisci gli ingredienti o usa quelli inseriti sopra e l'agente ti proporrà una ricetta completa.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-[5px]">
+                <input
+                  type="text"
+                  placeholder="es. Guanciale, Uova, Pecorino, Pepe (oppure usa gli ingredienti sopra)..."
+                  value={customIngredientsInput}
+                  onChange={(e) => setCustomIngredientsInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleGenerateDishFromIngredients();
+                    }
+                  }}
+                  className="flex-1 p-[5px] px-[8px] bg-white text-slate-900 placeholder-slate-400 border border-slate-300 rounded-md text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#f37021]"
+                />
+                <button
+                  type="button"
+                  onClick={handleGenerateDishFromIngredients}
+                  disabled={isGeneratingDish}
+                  className="p-[5px] px-[10px] bg-[#f37021] hover:bg-[#d95d13] text-white font-extrabold text-xs rounded-md shadow-2xs flex items-center gap-[4px] disabled:opacity-50 transition-colors shrink-0"
+                >
+                  <Wand2 className="w-3.5 h-3.5 text-white" />
+                  <span>{isGeneratingDish ? 'Generazione...' : 'Genera Piatto'}</span>
+                </button>
+              </div>
+            </div>
+
             {/* Footer Buttons */}
-            <div className="p-[5px] border-t border-slate-100 flex items-center justify-between gap-[10px]">
+            <div className="p-[5px] border-t border-slate-200 flex items-center justify-between gap-[5px] pt-[5px]">
               {isEditing ? (
                 <button
                   type="button"
@@ -615,7 +719,7 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
                 <button
                   type="submit"
                   disabled={isSaving}
-                  className="p-[10px] rounded-md bg-[#f37021] hover:bg-[#d95d13] text-white font-extrabold text-xs shadow-md flex items-center gap-[5px]"
+                  className="p-[5px] px-[12px] rounded-md bg-[#f37021] hover:bg-[#d95d13] text-white font-extrabold text-xs shadow-md flex items-center gap-[5px]"
                 >
                   <Save className="w-3.5 h-3.5 text-white" />
                   <span>{isSaving ? 'Salvataggio...' : 'Salva Ricetta'}</span>
