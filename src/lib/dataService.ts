@@ -8,12 +8,36 @@ import {
   deleteDoc,
   updateDoc
 } from 'firebase/firestore';
-import { db, isFirebaseConfigured } from './firebaseConfig';
+import { db, auth, isFirebaseConfigured } from './firebaseConfig';
+import { getSavedUserSession } from './familyAuthService';
 import { Recipe, WeeklyMenuItem, ShoppingListItem, PantryItem, Ingredient, DayOfWeek, MealType } from '../types';
 import { INITIAL_RECIPES, INITIAL_WEEKLY_MENU, INITIAL_SHOPPING_LIST, INITIAL_PANTRY_ITEMS } from '../data/initialData';
 
-// Local storage keys for fallback offline mode and cache
-const STORAGE_KEYS = {
+// Ottiene l'ID univoco dell'utente attualmente attivo (Firebase Auth o sessione utente locale)
+export function getCurrentUserId(): string {
+  if (auth && auth.currentUser && auth.currentUser.uid) {
+    return auth.currentUser.uid;
+  }
+  const session = getSavedUserSession();
+  if (session && session.uid) {
+    return session.uid;
+  }
+  return 'default_user';
+}
+
+// Helper per garantire il percorso user-scoped in Firestore: /users/{userId}/{collectionName}
+function getUserCollectionRef(collectionName: string) {
+  const userId = getCurrentUserId();
+  return collection(db!, 'users', userId, collectionName);
+}
+
+function getUserDocRef(collectionName: string, docId: string) {
+  const userId = getCurrentUserId();
+  return doc(db!, 'users', userId, collectionName, docId);
+}
+
+// Chiavi di local storage con prefisso utente per la cache locale
+const BASE_STORAGE_KEYS = {
   RECIPES: 'eatiof_recipes_v1',
   WEEKLY_MENU: 'eatiof_weekly_menu_v1',
   SHOPPING_LIST: 'eatiof_shopping_list_v1',
@@ -21,7 +45,12 @@ const STORAGE_KEYS = {
   SEEDED: 'eatiof_seeded_v2'
 };
 
-// Helper to strip undefined values from objects before writing to Firestore
+function getStorageKey(key: string): string {
+  const userId = getCurrentUserId();
+  return `${key}_${userId}`;
+}
+
+// Helper per pulire i campi undefined prima del salvataggio in Firestore
 function cleanData<T>(obj: T): T {
   if (obj === null || typeof obj !== 'object') return obj;
   if (Array.isArray(obj)) {
@@ -36,7 +65,7 @@ function cleanData<T>(obj: T): T {
   return cleaned as T;
 }
 
-// Custom event to broadcast changes across components in local mode
+// Evento custom per trasmettere modifiche locali
 const LOCAL_SYNC_EVENT = 'eatiof_local_data_changed';
 
 function notifyLocalChange() {
@@ -44,66 +73,68 @@ function notifyLocalChange() {
 }
 
 // ==========================================
-// SEEDING FUNCTIONALITY
+// SEEDING INITIAL DATA (USER-SCOPED)
 // ==========================================
 export async function seedInitialData(forceReset = false): Promise<void> {
-  // Ensure basic local cache exists if offline
-  const isSeeded = localStorage.getItem(STORAGE_KEYS.SEEDED);
+  const userId = getCurrentUserId();
+  const seededKey = getStorageKey(BASE_STORAGE_KEYS.SEEDED);
+  const isSeeded = localStorage.getItem(seededKey);
+
   if (!isSeeded || forceReset) {
-    localStorage.setItem(STORAGE_KEYS.RECIPES, JSON.stringify(INITIAL_RECIPES));
-    localStorage.setItem(STORAGE_KEYS.WEEKLY_MENU, JSON.stringify(INITIAL_WEEKLY_MENU));
-    localStorage.setItem(STORAGE_KEYS.SHOPPING_LIST, JSON.stringify(INITIAL_SHOPPING_LIST));
-    localStorage.setItem(STORAGE_KEYS.PANTRY, JSON.stringify(INITIAL_PANTRY_ITEMS));
-    localStorage.setItem(STORAGE_KEYS.SEEDED, 'true');
+    localStorage.setItem(getStorageKey(BASE_STORAGE_KEYS.RECIPES), JSON.stringify(INITIAL_RECIPES));
+    localStorage.setItem(getStorageKey(BASE_STORAGE_KEYS.WEEKLY_MENU), JSON.stringify(INITIAL_WEEKLY_MENU));
+    localStorage.setItem(getStorageKey(BASE_STORAGE_KEYS.SHOPPING_LIST), JSON.stringify(INITIAL_SHOPPING_LIST));
+    localStorage.setItem(getStorageKey(BASE_STORAGE_KEYS.PANTRY), JSON.stringify(INITIAL_PANTRY_ITEMS));
+    localStorage.setItem(seededKey, 'true');
     notifyLocalChange();
   }
 
   if (isFirebaseConfigured && db) {
     try {
-      const recipesSnap = await getDocs(collection(db, 'recipes'));
+      const userRecipesCol = getUserCollectionRef('recipes');
+      const recipesSnap = await getDocs(userRecipesCol);
 
-      // Seed default initial data into Firestore ONLY IF Firestore is completely empty
+      // Inserisce i dati di default se la sotto-collezione dell'utente è vuota
       if (recipesSnap.empty || forceReset) {
-        console.log('🌱 Popolamento iniziale di Firestore con i dati di base...');
+        console.log(`🌱 Popolamento iniziale Firestore per utente (${userId})...`);
         const batch = writeBatch(db);
 
         // Seed Recipes
         for (const recipe of INITIAL_RECIPES) {
-          batch.set(doc(db, 'recipes', recipe.id), cleanData(recipe));
+          batch.set(getUserDocRef('recipes', recipe.id), cleanData({ ...recipe, userId }));
         }
 
         // Seed Weekly Menu
         for (const menuItem of INITIAL_WEEKLY_MENU) {
-          batch.set(doc(db, 'weekly_menu', menuItem.id), cleanData(menuItem));
+          batch.set(getUserDocRef('weekly_menu', menuItem.id), cleanData({ ...menuItem, userId }));
         }
 
         // Seed Shopping List
         for (const shopItem of INITIAL_SHOPPING_LIST) {
-          batch.set(doc(db, 'shopping_list', shopItem.id), cleanData(shopItem));
+          batch.set(getUserDocRef('shopping_list', shopItem.id), cleanData({ ...shopItem, userId }));
         }
 
         // Seed Pantry
         for (const pantryItem of INITIAL_PANTRY_ITEMS) {
-          batch.set(doc(db, 'pantry', pantryItem.id), cleanData(pantryItem));
+          batch.set(getUserDocRef('pantry', pantryItem.id), cleanData({ ...pantryItem, userId }));
         }
 
         await batch.commit();
-        console.log('✅ Firestore popolato inizialmente con successo!');
+        console.log(`✅ Firestore popolato con successo per l'utente (${userId})!`);
       } else {
-        console.log('🔥 Connesso a Firestore. Dati già presenti e sincronizzati in tempo reale.');
+        console.log(`🔥 Connesso a Firestore sotto l'utente (${userId}). Dati sincronizzati in tempo reale.`);
       }
     } catch (err) {
-      console.warn('⚠️ Errore durante il controllo del seeding Firestore:', err);
+      console.warn('⚠️ Errore durante il seeding Firestore per utente:', err);
     }
   }
 }
 
 // ==========================================
-// REAL-TIME SUBSCRIBERS
+// REAL-TIME SUBSCRIBERS (USER-SCOPED)
 // ==========================================
 
 export function subscribeToRecipes(callback: (recipes: Recipe[]) => void): () => void {
-  // Emit local cache immediately for instant render
   callback(getLocalRecipes());
 
   const localHandler = () => callback(getLocalRecipes());
@@ -113,18 +144,19 @@ export function subscribeToRecipes(callback: (recipes: Recipe[]) => void): () =>
   let unsubFirestore = () => {};
 
   if (isFirebaseConfigured && db) {
+    const userRecipesCol = getUserCollectionRef('recipes');
     unsubFirestore = onSnapshot(
-      collection(db, 'recipes'),
+      userRecipesCol,
       (snapshot) => {
         const firestoreRecipes: Recipe[] = [];
         snapshot.forEach((docSnap) => {
           firestoreRecipes.push({ id: docSnap.id, ...docSnap.data() } as Recipe);
         });
-        localStorage.setItem(STORAGE_KEYS.RECIPES, JSON.stringify(firestoreRecipes));
+        localStorage.setItem(getStorageKey(BASE_STORAGE_KEYS.RECIPES), JSON.stringify(firestoreRecipes));
         callback(firestoreRecipes);
       },
       (err) => {
-        console.warn('Fallback a LocalStorage per recipes:', err?.message || err);
+        console.warn('Fallback LocalStorage per recipes:', err?.message || err);
         callback(getLocalRecipes());
       }
     );
@@ -147,18 +179,19 @@ export function subscribeToWeeklyMenu(callback: (menu: WeeklyMenuItem[]) => void
   let unsubFirestore = () => {};
 
   if (isFirebaseConfigured && db) {
+    const userMenuCol = getUserCollectionRef('weekly_menu');
     unsubFirestore = onSnapshot(
-      collection(db, 'weekly_menu'),
+      userMenuCol,
       (snapshot) => {
         const firestoreMenu: WeeklyMenuItem[] = [];
         snapshot.forEach((docSnap) => {
           firestoreMenu.push({ id: docSnap.id, ...docSnap.data() } as WeeklyMenuItem);
         });
-        localStorage.setItem(STORAGE_KEYS.WEEKLY_MENU, JSON.stringify(firestoreMenu));
+        localStorage.setItem(getStorageKey(BASE_STORAGE_KEYS.WEEKLY_MENU), JSON.stringify(firestoreMenu));
         callback(firestoreMenu);
       },
       (err) => {
-        console.warn('Fallback a LocalStorage per weekly_menu:', err?.message || err);
+        console.warn('Fallback LocalStorage per weekly_menu:', err?.message || err);
         callback(getLocalWeeklyMenu());
       }
     );
@@ -181,18 +214,19 @@ export function subscribeToShoppingList(callback: (items: ShoppingListItem[]) =>
   let unsubFirestore = () => {};
 
   if (isFirebaseConfigured && db) {
+    const userShopCol = getUserCollectionRef('shopping_list');
     unsubFirestore = onSnapshot(
-      collection(db, 'shopping_list'),
+      userShopCol,
       (snapshot) => {
         const firestoreItems: ShoppingListItem[] = [];
         snapshot.forEach((docSnap) => {
           firestoreItems.push({ ...docSnap.data(), id: docSnap.id } as ShoppingListItem);
         });
-        localStorage.setItem(STORAGE_KEYS.SHOPPING_LIST, JSON.stringify(firestoreItems));
+        localStorage.setItem(getStorageKey(BASE_STORAGE_KEYS.SHOPPING_LIST), JSON.stringify(firestoreItems));
         callback(firestoreItems);
       },
       (err) => {
-        console.warn('Fallback a LocalStorage per shopping_list:', err?.message || err);
+        console.warn('Fallback LocalStorage per shopping_list:', err?.message || err);
         callback(getLocalShoppingList());
       }
     );
@@ -215,8 +249,9 @@ export function subscribeToPantryItems(callback: (items: PantryItem[]) => void):
   let unsubFirestore = () => {};
 
   if (isFirebaseConfigured && db) {
+    const userPantryCol = getUserCollectionRef('pantry');
     unsubFirestore = onSnapshot(
-      collection(db, 'pantry'),
+      userPantryCol,
       (snapshot) => {
         const firestorePantry: PantryItem[] = [];
         snapshot.forEach((docSnap) => {
@@ -227,11 +262,11 @@ export function subscribeToPantryItems(callback: (items: PantryItem[]) => void):
           }
           firestorePantry.push({ ...data, id: docSnap.id, category: (cat || 'Frigo') as any });
         });
-        localStorage.setItem(STORAGE_KEYS.PANTRY, JSON.stringify(firestorePantry));
+        localStorage.setItem(getStorageKey(BASE_STORAGE_KEYS.PANTRY), JSON.stringify(firestorePantry));
         callback(firestorePantry);
       },
       (err) => {
-        console.warn('Fallback a LocalStorage per pantry:', err?.message || err);
+        console.warn('Fallback LocalStorage per pantry:', err?.message || err);
         callback(getLocalPantryItems());
       }
     );
@@ -248,7 +283,7 @@ export function subscribeToPantryItems(callback: (items: PantryItem[]) => void):
 // LOCAL STORAGE HELPERS
 // ==========================================
 function getLocalRecipes(): Recipe[] {
-  const data = localStorage.getItem(STORAGE_KEYS.RECIPES);
+  const data = localStorage.getItem(getStorageKey(BASE_STORAGE_KEYS.RECIPES));
   let recipes: Recipe[] = [];
   if (data) {
     try {
@@ -260,24 +295,24 @@ function getLocalRecipes(): Recipe[] {
 
   if (!recipes || recipes.length === 0) {
     recipes = [...INITIAL_RECIPES];
-    localStorage.setItem(STORAGE_KEYS.RECIPES, JSON.stringify(recipes));
+    localStorage.setItem(getStorageKey(BASE_STORAGE_KEYS.RECIPES), JSON.stringify(recipes));
   }
 
   return recipes;
 }
 
 function getLocalWeeklyMenu(): WeeklyMenuItem[] {
-  const data = localStorage.getItem(STORAGE_KEYS.WEEKLY_MENU);
+  const data = localStorage.getItem(getStorageKey(BASE_STORAGE_KEYS.WEEKLY_MENU));
   return data ? JSON.parse(data) : INITIAL_WEEKLY_MENU;
 }
 
 function getLocalShoppingList(): ShoppingListItem[] {
-  const data = localStorage.getItem(STORAGE_KEYS.SHOPPING_LIST);
+  const data = localStorage.getItem(getStorageKey(BASE_STORAGE_KEYS.SHOPPING_LIST));
   return data ? JSON.parse(data) : INITIAL_SHOPPING_LIST;
 }
 
 export function getLocalPantryItems(): PantryItem[] {
-  const data = localStorage.getItem(STORAGE_KEYS.PANTRY);
+  const data = localStorage.getItem(getStorageKey(BASE_STORAGE_KEYS.PANTRY));
   const items: PantryItem[] = data ? JSON.parse(data) : INITIAL_PANTRY_ITEMS;
   return items.map((item) => {
     let cat = item.category;
@@ -293,30 +328,34 @@ export function getLocalPantryItems(): PantryItem[] {
 // ==========================================
 export async function saveRecipe(recipe: Recipe): Promise<void> {
   const recipeId = recipe.id || `recipe-${Date.now()}`;
-  const recipeToSave = { ...recipe, id: recipeId };
+  const userId = getCurrentUserId();
+  const recipeToSave = { ...recipe, id: recipeId, userId };
 
-  // Update local cache
   const recipes = getLocalRecipes().filter((r) => r.id !== recipeId);
   recipes.push(recipeToSave);
-  localStorage.setItem(STORAGE_KEYS.RECIPES, JSON.stringify(recipes));
+  localStorage.setItem(getStorageKey(BASE_STORAGE_KEYS.RECIPES), JSON.stringify(recipes));
   notifyLocalChange();
 
   if (isFirebaseConfigured && db) {
-    setDoc(doc(db, 'recipes', recipeId), cleanData(recipeToSave)).catch((err) => {
+    try {
+      await setDoc(getUserDocRef('recipes', recipeId), cleanData(recipeToSave));
+    } catch (err) {
       console.warn('Errore salvataggio ricetta in Firestore:', err);
-    });
+    }
   }
 }
 
 export async function deleteRecipe(recipeId: string): Promise<void> {
   const recipes = getLocalRecipes().filter((r) => r.id !== recipeId);
-  localStorage.setItem(STORAGE_KEYS.RECIPES, JSON.stringify(recipes));
+  localStorage.setItem(getStorageKey(BASE_STORAGE_KEYS.RECIPES), JSON.stringify(recipes));
   notifyLocalChange();
 
   if (isFirebaseConfigured && db) {
-    deleteDoc(doc(db, 'recipes', recipeId)).catch((err) => {
+    try {
+      await deleteDoc(getUserDocRef('recipes', recipeId));
+    } catch (err) {
       console.warn('Errore eliminazione ricetta in Firestore:', err);
-    });
+    }
   }
 }
 
@@ -330,6 +369,7 @@ export async function addWeeklyMenuItem(
   recipeName: string,
   weekId: string = 'current'
 ): Promise<void> {
+  const userId = getCurrentUserId();
   const slotId = `menu-${weekId}-${day}-${mealType}-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
   const menuItem: WeeklyMenuItem = {
     id: slotId,
@@ -337,18 +377,21 @@ export async function addWeeklyMenuItem(
     mealType,
     recipeId,
     recipeName,
-    weekId
+    weekId,
+    userId
   };
 
   const menu = getLocalWeeklyMenu();
   menu.push(menuItem);
-  localStorage.setItem(STORAGE_KEYS.WEEKLY_MENU, JSON.stringify(menu));
+  localStorage.setItem(getStorageKey(BASE_STORAGE_KEYS.WEEKLY_MENU), JSON.stringify(menu));
   notifyLocalChange();
 
   if (isFirebaseConfigured && db) {
-    setDoc(doc(db, 'weekly_menu', slotId), cleanData(menuItem)).catch((err) => {
+    try {
+      await setDoc(getUserDocRef('weekly_menu', slotId), cleanData(menuItem));
+    } catch (err) {
       console.warn('Errore aggiunta menu settimanale in Firestore:', err);
-    });
+    }
   }
 }
 
@@ -364,13 +407,15 @@ export async function setWeeklySlot(
 
 export async function removeWeeklyMenuItem(itemId: string): Promise<void> {
   const menu = getLocalWeeklyMenu().filter((m) => m.id !== itemId);
-  localStorage.setItem(STORAGE_KEYS.WEEKLY_MENU, JSON.stringify(menu));
+  localStorage.setItem(getStorageKey(BASE_STORAGE_KEYS.WEEKLY_MENU), JSON.stringify(menu));
   notifyLocalChange();
 
   if (isFirebaseConfigured && db) {
-    deleteDoc(doc(db, 'weekly_menu', itemId)).catch((err) => {
+    try {
+      await deleteDoc(getUserDocRef('weekly_menu', itemId));
+    } catch (err) {
       console.warn('Errore rimozione menu settimanale in Firestore:', err);
-    });
+    }
   }
 }
 
@@ -383,12 +428,12 @@ export async function removeWeeklySlot(
     const mWeek = m.weekId || 'current';
     return !(mWeek === weekId && m.day === day && m.mealType === mealType);
   });
-  localStorage.setItem(STORAGE_KEYS.WEEKLY_MENU, JSON.stringify(menu));
+  localStorage.setItem(getStorageKey(BASE_STORAGE_KEYS.WEEKLY_MENU), JSON.stringify(menu));
   notifyLocalChange();
 
   if (isFirebaseConfigured && db) {
     try {
-      const snap = await getDocs(collection(db, 'weekly_menu'));
+      const snap = await getDocs(getUserCollectionRef('weekly_menu'));
       const batch = writeBatch(db);
       let hasDeletes = false;
       snap.forEach((docSnap) => {
@@ -416,18 +461,21 @@ export async function toggleShoppingItem(itemId: string, currentStatus: boolean)
   const item = items.find((i) => i.id === itemId);
   if (item) {
     item.isChecked = !currentStatus;
-    localStorage.setItem(STORAGE_KEYS.SHOPPING_LIST, JSON.stringify(items));
+    localStorage.setItem(getStorageKey(BASE_STORAGE_KEYS.SHOPPING_LIST), JSON.stringify(items));
     notifyLocalChange();
   }
 
   if (isFirebaseConfigured && db) {
-    updateDoc(doc(db, 'shopping_list', itemId), { isChecked: !currentStatus }).catch((err) => {
+    try {
+      await updateDoc(getUserDocRef('shopping_list', itemId), { isChecked: !currentStatus });
+    } catch (err) {
       console.warn('Errore toggle spesa in Firestore:', err);
-    });
+    }
   }
 }
 
 export async function addManualShoppingItem(ingredientName: string, quantity: number | string, unit: string): Promise<void> {
+  const userId = getCurrentUserId();
   const newItemId = `shop-manual-${Date.now()}`;
   const newItem: ShoppingListItem = {
     id: newItemId,
@@ -435,18 +483,21 @@ export async function addManualShoppingItem(ingredientName: string, quantity: nu
     quantity,
     unit: unit || 'pz',
     isChecked: false,
-    addedManually: true
+    addedManually: true,
+    userId
   };
 
   const items = getLocalShoppingList();
   items.unshift(newItem);
-  localStorage.setItem(STORAGE_KEYS.SHOPPING_LIST, JSON.stringify(items));
+  localStorage.setItem(getStorageKey(BASE_STORAGE_KEYS.SHOPPING_LIST), JSON.stringify(items));
   notifyLocalChange();
 
   if (isFirebaseConfigured && db) {
-    setDoc(doc(db, 'shopping_list', newItemId), cleanData(newItem)).catch((err) => {
+    try {
+      await setDoc(getUserDocRef('shopping_list', newItemId), cleanData(newItem));
+    } catch (err) {
       console.warn('Errore aggiunta spesa manuale in Firestore:', err);
-    });
+    }
   }
 }
 
@@ -461,19 +512,19 @@ export async function removeShoppingItem(itemId: string, ingredientName?: string
     return true;
   });
 
-  localStorage.setItem(STORAGE_KEYS.SHOPPING_LIST, JSON.stringify(items));
+  localStorage.setItem(getStorageKey(BASE_STORAGE_KEYS.SHOPPING_LIST), JSON.stringify(items));
   notifyLocalChange();
 
   if (isFirebaseConfigured && db) {
     try {
-      await deleteDoc(doc(db, 'shopping_list', itemId));
+      await deleteDoc(getUserDocRef('shopping_list', itemId));
     } catch (err) {
       console.warn('Errore eliminazione spesa in Firestore:', err);
     }
 
     if (targetName) {
       try {
-        const snap = await getDocs(collection(db, 'shopping_list'));
+        const snap = await getDocs(getUserCollectionRef('shopping_list'));
         const batch = writeBatch(db);
         let hasDeletes = false;
         snap.forEach((docSnap) => {
@@ -496,12 +547,12 @@ export async function removeShoppingItem(itemId: string, ingredientName?: string
 
 export async function clearCheckedItems(): Promise<void> {
   const itemsToKeep = getLocalShoppingList().filter((i) => !i.isChecked);
-  localStorage.setItem(STORAGE_KEYS.SHOPPING_LIST, JSON.stringify(itemsToKeep));
+  localStorage.setItem(getStorageKey(BASE_STORAGE_KEYS.SHOPPING_LIST), JSON.stringify(itemsToKeep));
   notifyLocalChange();
 
   if (isFirebaseConfigured && db) {
     try {
-      const snap = await getDocs(collection(db, 'shopping_list'));
+      const snap = await getDocs(getUserCollectionRef('shopping_list'));
       const batch = writeBatch(db);
       let hasDeletes = false;
       snap.forEach((docSnap) => {
@@ -521,13 +572,13 @@ export async function clearCheckedItems(): Promise<void> {
 
 // ==========================================
 // GENERATE SPESA (ALGORITHM)
-// Aggregates ingredients from weekly menu items
 // ==========================================
 export async function generateShoppingListFromMenu(
   weeklyMenu: WeeklyMenuItem[],
   recipes: Recipe[],
   targetWeekId: string = 'current'
 ): Promise<number> {
+  const userId = getCurrentUserId();
   const recipeMap = new Map<string, Recipe>();
   recipes.forEach((r) => recipeMap.set(r.id, r));
 
@@ -604,17 +655,18 @@ export async function generateShoppingListFromMenu(
       quantity: finalQty,
       unit: val.unit,
       isChecked,
-      recipeSources: Array.from(val.sources)
+      recipeSources: Array.from(val.sources),
+      userId
     });
   });
 
   manualItems.forEach((m) => {
-    newShoppingList.push(m);
+    newShoppingList.push({ ...m, userId });
   });
 
   if (isFirebaseConfigured && db) {
     try {
-      const snap = await getDocs(collection(db, 'shopping_list'));
+      const snap = await getDocs(getUserCollectionRef('shopping_list'));
       const batch = writeBatch(db);
 
       snap.forEach((docSnap) => {
@@ -622,17 +674,17 @@ export async function generateShoppingListFromMenu(
       });
 
       for (const item of newShoppingList) {
-        batch.set(doc(db, 'shopping_list', item.id), cleanData(item));
+        batch.set(getUserDocRef('shopping_list', item.id), cleanData(item));
       }
 
       await batch.commit();
-      localStorage.setItem(STORAGE_KEYS.SHOPPING_LIST, JSON.stringify(newShoppingList));
+      localStorage.setItem(getStorageKey(BASE_STORAGE_KEYS.SHOPPING_LIST), JSON.stringify(newShoppingList));
       notifyLocalChange();
     } catch (err) {
       console.warn('Errore rigenerazione spesa in Firestore:', err);
     }
   } else {
-    localStorage.setItem(STORAGE_KEYS.SHOPPING_LIST, JSON.stringify(newShoppingList));
+    localStorage.setItem(getStorageKey(BASE_STORAGE_KEYS.SHOPPING_LIST), JSON.stringify(newShoppingList));
     notifyLocalChange();
   }
 
@@ -640,11 +692,12 @@ export async function generateShoppingListFromMenu(
 }
 
 // ==========================================
-// PANTRY / FRIGORIFERO CRUD
+// PANTRY / FRIGORIFERO CRUD (USER-SCOPED)
 // ==========================================
 export async function savePantryItem(item: PantryItem): Promise<void> {
   const itemId = item.id || `pantry-${Date.now()}`;
-  const itemToSave = { ...item, id: itemId };
+  const userId = getCurrentUserId();
+  const itemToSave = { ...item, id: itemId, userId };
 
   const targetName = item.name ? item.name.trim().toLowerCase() : '';
 
@@ -654,13 +707,13 @@ export async function savePantryItem(item: PantryItem): Promise<void> {
     return true;
   });
   items.unshift(itemToSave);
-  localStorage.setItem(STORAGE_KEYS.PANTRY, JSON.stringify(items));
+  localStorage.setItem(getStorageKey(BASE_STORAGE_KEYS.PANTRY), JSON.stringify(items));
   notifyLocalChange();
 
   if (isFirebaseConfigured && db) {
     try {
-      await setDoc(doc(db, 'pantry', itemId), cleanData(itemToSave));
-      console.log('✅ Alimento salvato con successo su Firestore:', itemId);
+      await setDoc(getUserDocRef('pantry', itemId), cleanData(itemToSave));
+      console.log(`✅ Alimento salvato con successo per utente (${userId}):`, itemId);
     } catch (err) {
       console.error('❌ Errore salvataggio pantry in Firestore:', err);
     }
@@ -678,19 +731,19 @@ export async function deletePantryItem(itemId: string, itemName?: string): Promi
     return true;
   });
 
-  localStorage.setItem(STORAGE_KEYS.PANTRY, JSON.stringify(items));
+  localStorage.setItem(getStorageKey(BASE_STORAGE_KEYS.PANTRY), JSON.stringify(items));
   notifyLocalChange();
 
   if (isFirebaseConfigured && db) {
     try {
-      await deleteDoc(doc(db, 'pantry', itemId));
+      await deleteDoc(getUserDocRef('pantry', itemId));
     } catch (err) {
       console.warn('Errore deleteDoc pantry Firestore:', err);
     }
 
     if (targetName) {
       try {
-        const snap = await getDocs(collection(db, 'pantry'));
+        const snap = await getDocs(getUserCollectionRef('pantry'));
         const batch = writeBatch(db);
         let hasDeletes = false;
         snap.forEach((docSnap) => {
@@ -735,18 +788,17 @@ export async function autoCheckPantryItemsInShoppingList(pantryItems: PantryItem
       try {
         const batch = writeBatch(db);
         for (const item of updatedShoppingItems) {
-          batch.set(doc(db, 'shopping_list', item.id), cleanData(item));
+          batch.set(getUserDocRef('shopping_list', item.id), cleanData(item));
         }
         await batch.commit();
       } catch (err) {
         console.warn('Errore spunta automatica in Firestore:', err);
       }
     } else {
-      localStorage.setItem(STORAGE_KEYS.SHOPPING_LIST, JSON.stringify(updatedShoppingItems));
+      localStorage.setItem(getStorageKey(BASE_STORAGE_KEYS.SHOPPING_LIST), JSON.stringify(updatedShoppingItems));
       notifyLocalChange();
     }
   }
 
   return checkedCount;
 }
-

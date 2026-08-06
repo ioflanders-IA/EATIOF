@@ -40,6 +40,7 @@ export interface PantryItem {
   category?: 'Frigo' | 'Dispensa' | 'Freezer' | 'Freschi';
   expirationDate?: string;
   notes?: string;
+  userId?: string;
 }
 
 export interface Ingredient {
@@ -69,6 +70,7 @@ export interface Recipe {
   prepTimeMinutes?: number;
   servings?: number;
   nutrition?: NutritionInfo;
+  userId?: string;
 }
 
 export type MealType = 'lunch' | 'dinner';
@@ -84,6 +86,7 @@ export interface WeeklyMenuItem {
   servings?: number;
   weekId?: string;
   date?: string;
+  userId?: string;
 }
 
 export interface ShoppingListItem {
@@ -94,4 +97,5 @@ export interface ShoppingListItem {
   isChecked: boolean;
   addedManually?: boolean;
   recipeSources?: string[];
+  userId?: string;
 }

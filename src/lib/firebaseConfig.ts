@@ -29,13 +29,19 @@ let isFirebaseConfigured = false;
 if (firebaseConfig.apiKey && firebaseConfig.projectId && firebaseConfig.apiKey !== 'YOUR_API_KEY') {
   try {
     app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-    // Prefer explicit env var VITE_FIREBASE_DATABASE_ID, otherwise use default database
-    const dbId = metaEnv.VITE_FIREBASE_DATABASE_ID;
-    try {
-      db = dbId ? getFirestore(app, dbId) : getFirestore(app);
-    } catch (e) {
-      console.warn('Fallback a database default:', e);
+    // Use database ID from env var or firebase-applet-config.json if specified
+    const dbId = metaEnv.VITE_FIREBASE_DATABASE_ID || (firebaseConfigJson as any).firestoreDatabaseId;
+    if (dbId) {
+      try {
+        db = getFirestore(app, dbId);
+        console.log(`🔥 Firestore connesso al database: ${dbId}`);
+      } catch (e) {
+        console.warn(`⚠️ Impossibile connettersi al database ${dbId}, fallback a (default):`, e);
+        db = getFirestore(app);
+      }
+    } else {
       db = getFirestore(app);
+      console.log('🔥 Firestore connesso al database default');
     }
     auth = getAuth(app);
     setPersistence(auth, browserLocalPersistence).catch((err) => {
