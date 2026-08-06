@@ -151,16 +151,20 @@ export function subscribeToRecipes(callback: (recipes: Recipe[]) => void): () =>
   if (isFirebaseConfigured && db) {
     unsubFirestore = onSnapshot(
       collection(db, 'recipes'),
-      async (snapshot) => {
-        if (snapshot.empty && !snapshot.metadata.hasPendingWrites) {
-          console.log('🌱 Recipes Firestore vuoto: seeding...');
+      (snapshot) => {
+        if (snapshot.empty) {
           const localRecipes = getLocalRecipes();
           const recipesToSeed = localRecipes.length > 0 ? localRecipes : INITIAL_RECIPES;
-          const batch = writeBatch(db);
-          for (const r of recipesToSeed) {
-            batch.set(doc(db, 'recipes', r.id), cleanData(r));
+          callback(recipesToSeed);
+
+          if (!snapshot.metadata.hasPendingWrites) {
+            console.log('🌱 Recipes Firestore vuoto: seeding in background...');
+            const batch = writeBatch(db);
+            for (const r of recipesToSeed) {
+              batch.set(doc(db, 'recipes', r.id), cleanData(r));
+            }
+            batch.commit().catch((e) => logFirestoreError(e, 'subscribeToRecipesSeed', 'recipes'));
           }
-          await batch.commit().catch((e) => console.warn(e));
           return;
         }
 
@@ -197,16 +201,20 @@ export function subscribeToWeeklyMenu(callback: (menu: WeeklyMenuItem[]) => void
   if (isFirebaseConfigured && db) {
     unsubFirestore = onSnapshot(
       collection(db, 'weekly_menu'),
-      async (snapshot) => {
-        if (snapshot.empty && !snapshot.metadata.hasPendingWrites) {
-          console.log('🌱 Menu Firestore vuoto: seeding...');
+      (snapshot) => {
+        if (snapshot.empty) {
           const localMenu = getLocalWeeklyMenu();
           const menuToSeed = localMenu.length > 0 ? localMenu : INITIAL_WEEKLY_MENU;
-          const batch = writeBatch(db);
-          for (const m of menuToSeed) {
-            batch.set(doc(db, 'weekly_menu', m.id), cleanData(m));
+          callback(menuToSeed);
+
+          if (!snapshot.metadata.hasPendingWrites) {
+            console.log('🌱 Menu Firestore vuoto: seeding in background...');
+            const batch = writeBatch(db);
+            for (const m of menuToSeed) {
+              batch.set(doc(db, 'weekly_menu', m.id), cleanData(m));
+            }
+            batch.commit().catch((e) => logFirestoreError(e, 'subscribeToWeeklyMenuSeed', 'weekly_menu'));
           }
-          await batch.commit().catch((e) => console.warn(e));
           return;
         }
 
@@ -243,16 +251,20 @@ export function subscribeToShoppingList(callback: (items: ShoppingListItem[]) =>
   if (isFirebaseConfigured && db) {
     unsubFirestore = onSnapshot(
       collection(db, 'shopping_list'),
-      async (snapshot) => {
-        if (snapshot.empty && !snapshot.metadata.hasPendingWrites) {
-          console.log('🌱 Shopping List Firestore vuoto: seeding...');
+      (snapshot) => {
+        if (snapshot.empty) {
           const localList = getLocalShoppingList();
           const listToSeed = localList.length > 0 ? localList : INITIAL_SHOPPING_LIST;
-          const batch = writeBatch(db);
-          for (const item of listToSeed) {
-            batch.set(doc(db, 'shopping_list', item.id), cleanData(item));
+          callback(listToSeed);
+
+          if (!snapshot.metadata.hasPendingWrites) {
+            console.log('🌱 Shopping List Firestore vuoto: seeding in background...');
+            const batch = writeBatch(db);
+            for (const item of listToSeed) {
+              batch.set(doc(db, 'shopping_list', item.id), cleanData(item));
+            }
+            batch.commit().catch((e) => logFirestoreError(e, 'subscribeToShoppingListSeed', 'shopping_list'));
           }
-          await batch.commit().catch((e) => console.warn(e));
           return;
         }
 
@@ -289,16 +301,20 @@ export function subscribeToPantryItems(callback: (items: PantryItem[]) => void):
   if (isFirebaseConfigured && db) {
     unsubFirestore = onSnapshot(
       collection(db, 'pantry'),
-      async (snapshot) => {
-        if (snapshot.empty && !snapshot.metadata.hasPendingWrites) {
-          console.log('🌱 Pantry Firestore vuoto: seeding iniziale...');
+      (snapshot) => {
+        if (snapshot.empty) {
           const localItems = getLocalPantryItems();
           const itemsToSeed = localItems.length > 0 ? localItems : INITIAL_PANTRY_ITEMS;
-          const batch = writeBatch(db);
-          for (const item of itemsToSeed) {
-            batch.set(doc(db, 'pantry', item.id), cleanData(item));
+          callback(itemsToSeed);
+
+          if (!snapshot.metadata.hasPendingWrites) {
+            console.log('🌱 Pantry Firestore vuoto: seeding in background...');
+            const batch = writeBatch(db);
+            for (const item of itemsToSeed) {
+              batch.set(doc(db, 'pantry', item.id), cleanData(item));
+            }
+            batch.commit().catch((e) => logFirestoreError(e, 'subscribeToPantryItemsSeed', 'pantry'));
           }
-          await batch.commit().catch((e) => console.warn(e));
           return;
         }
 
@@ -749,21 +765,18 @@ export async function generateShoppingListFromMenu(
 // PANTRY / FRIGORIFERO CRUD (SHARED FAMILY)
 // ==========================================
 export async function savePantryItem(item: PantryItem): Promise<void> {
-  const itemId = item.id || `pantry-${Date.now()}`;
+  const itemId = item.id && item.id.trim() ? item.id : `pantry-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
   const userId = getCurrentUserId();
-  const itemToSave = { ...item, id: itemId, userId };
+  const itemToSave: PantryItem = { ...item, id: itemId, userId };
 
-  const targetName = item.name ? item.name.trim().toLowerCase() : '';
-
-  const items = getLocalPantryItems().filter((i) => {
-    if (i.id === itemId) return false;
-    if (targetName && i.name && i.name.trim().toLowerCase() === targetName && i.category === item.category) return false;
-    return true;
-  });
-  items.unshift(itemToSave);
-  localStorage.setItem(STORAGE_KEYS.PANTRY, JSON.stringify(items));
+  // 1. Optimistic Local State Update
+  const currentItems = getLocalPantryItems();
+  const filtered = currentItems.filter((i) => i.id !== itemId);
+  filtered.unshift(itemToSave);
+  localStorage.setItem(STORAGE_KEYS.PANTRY, JSON.stringify(filtered));
   notifyLocalChange();
 
+  // 2. Background Firestore Sync
   if (isFirebaseConfigured && db) {
     try {
       await setDoc(doc(db, 'pantry', itemId), cleanData(itemToSave));
@@ -775,19 +788,16 @@ export async function savePantryItem(item: PantryItem): Promise<void> {
 }
 
 export async function deletePantryItem(itemId: string, itemName?: string): Promise<void> {
+  // 1. Optimistic Local State Update
   const currentItems = getLocalPantryItems();
   const targetItem = currentItems.find((i) => i.id === itemId);
   const targetName = (itemName || targetItem?.name || '').trim().toLowerCase();
 
-  const items = currentItems.filter((i) => {
-    if (i.id === itemId) return false;
-    if (targetName && i.name && i.name.trim().toLowerCase() === targetName) return false;
-    return true;
-  });
-
+  const items = currentItems.filter((i) => i.id !== itemId);
   localStorage.setItem(STORAGE_KEYS.PANTRY, JSON.stringify(items));
   notifyLocalChange();
 
+  // 2. Background Firestore Sync
   if (isFirebaseConfigured && db) {
     try {
       await deleteDoc(doc(db, 'pantry', itemId));

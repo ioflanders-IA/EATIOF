@@ -4,7 +4,7 @@
   "apiKey": "AIzaSyDqFuzRTjjlFi4Brl36yEt5T51uUf5Of34",
   "authDomain": "eatiof.firebaseapp.com",
   "databaseURL": "https://eatiof-default-rtdb.firebaseio.com",
-  "firestoreDatabaseId": "ai-studio-eatiofv1-d1ea1e09-f9d5-468e-8a80-ecf57ba60791",
+  "firestoreDatabaseId": "(default)",
   "storageBucket": "eatiof.firebasestorage.app",
   "messagingSenderId": "1098152315777",
   "measurementId": "",

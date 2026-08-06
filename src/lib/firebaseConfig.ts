@@ -5,7 +5,7 @@ import firebaseConfigJson from '../../firebase-applet-config.json';
 
 const metaEnv = (import.meta as any).env || {};
 
-// Configuration loaded from firebase-applet-config.json, environment variables, or defaults
+// Configuration loaded from firebase-applet-config.json, environment variables, or exact user config
 const firebaseConfig = {
   apiKey: metaEnv.VITE_FIREBASE_API_KEY || firebaseConfigJson.apiKey || 'AIzaSyDqFuzRTjjlFi4Brl36yEt5T51uUf5Of34',
   authDomain: metaEnv.VITE_FIREBASE_AUTH_DOMAIN || firebaseConfigJson.authDomain || 'eatiof.firebaseapp.com',
@@ -29,9 +29,8 @@ let isFirebaseConfigured = false;
 if (firebaseConfig.apiKey && firebaseConfig.projectId && firebaseConfig.apiKey !== 'YOUR_API_KEY') {
   try {
     app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-    // Use database ID from env var or firebase-applet-config.json if specified
     const dbId = metaEnv.VITE_FIREBASE_DATABASE_ID || (firebaseConfigJson as any).firestoreDatabaseId;
-    if (dbId) {
+    if (dbId && dbId !== '(default)') {
       try {
         db = getFirestore(app, dbId);
         console.log(`🔥 Firestore connesso al database: ${dbId}`);
@@ -41,7 +40,7 @@ if (firebaseConfig.apiKey && firebaseConfig.projectId && firebaseConfig.apiKey !
       }
     } else {
       db = getFirestore(app);
-      console.log('🔥 Firestore connesso al database default');
+      console.log('🔥 Firestore connesso al database (default)');
     }
     auth = getAuth(app);
     setPersistence(auth, browserLocalPersistence).catch((err) => {

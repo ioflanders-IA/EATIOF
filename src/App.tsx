@@ -75,30 +75,26 @@ export default function App() {
       setIsLoading(false);
     }, 1500);
 
-    async function init() {
-      // Ensure initial demo data exists in LocalStorage and Firestore
-      await seedInitialData();
+    // Subscribe immediately to real-time streams (instant UI hydration)
+    unsubRecipes = subscribeToRecipes((data) => {
+      setRecipes(data);
+      setIsLoading(false);
+    });
 
-      // Subscribe immediately to real-time streams
-      unsubRecipes = subscribeToRecipes((data) => {
-        setRecipes(data);
-        setIsLoading(false);
-      });
+    unsubMenu = subscribeToWeeklyMenu((data) => {
+      setWeeklyMenu(data);
+    });
 
-      unsubMenu = subscribeToWeeklyMenu((data) => {
-        setWeeklyMenu(data);
-      });
+    unsubShopping = subscribeToShoppingList((data) => {
+      setShoppingList(data);
+    });
 
-      unsubShopping = subscribeToShoppingList((data) => {
-        setShoppingList(data);
-      });
+    unsubPantry = subscribeToPantryItems((data) => {
+      setPantryItems(data);
+    });
 
-      unsubPantry = subscribeToPantryItems((data) => {
-        setPantryItems(data);
-      });
-    }
-
-    init();
+    // Ensure initial demo data exists in background without blocking streams
+    seedInitialData().catch((err) => console.warn('Seed notice:', err));
 
     return () => {
       clearTimeout(loadingTimeout);
