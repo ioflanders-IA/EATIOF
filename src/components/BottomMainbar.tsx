@@ -32,9 +32,6 @@ export const BottomMainbar: React.FC<BottomMainbarProps> = ({
                 : 'text-slate-300 hover:text-white opacity-80 hover:opacity-100'
             }`}
           >
-            {activeTab === 'recipes' && (
-              <span className="absolute top-0 w-10 h-1 bg-[#f37021] rounded-b-full shadow-sm" />
-            )}
             <div
               className={`transition-transform duration-200 ${
                 activeTab === 'recipes' ? 'text-[#f37021] scale-110' : 'text-slate-300'
@@ -56,9 +53,6 @@ export const BottomMainbar: React.FC<BottomMainbarProps> = ({
                 : 'text-slate-300 hover:text-white opacity-80 hover:opacity-100'
             }`}
           >
-            {activeTab === 'calendar' && (
-              <span className="absolute top-0 w-10 h-1 bg-[#f37021] rounded-b-full shadow-sm" />
-            )}
             <div
               className={`transition-transform duration-200 ${
                 activeTab === 'calendar' ? 'text-[#f37021] scale-110' : 'text-slate-300'
@@ -80,9 +74,6 @@ export const BottomMainbar: React.FC<BottomMainbarProps> = ({
                 : 'text-slate-300 hover:text-white opacity-80 hover:opacity-100'
             }`}
           >
-            {activeTab === 'pantry' && (
-              <span className="absolute top-0 w-10 h-1 bg-emerald-500 rounded-b-full shadow-sm" />
-            )}
             <div
               className={`transition-transform duration-200 ${
                 activeTab === 'pantry' ? 'text-emerald-400 scale-110' : 'text-slate-300'
@@ -104,9 +95,6 @@ export const BottomMainbar: React.FC<BottomMainbarProps> = ({
                 : 'text-slate-300 hover:text-white opacity-80 hover:opacity-100'
             }`}
           >
-            {(isMenuOpen || activeTab === 'stats') && (
-              <span className="absolute top-0 w-10 h-1 bg-amber-400 rounded-b-full shadow-sm" />
-            )}
             <div
               className={`transition-transform duration-200 ${
                 isMenuOpen || activeTab === 'stats' ? 'text-amber-400 scale-110' : 'text-slate-300'

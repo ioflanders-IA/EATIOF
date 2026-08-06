@@ -172,16 +172,23 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
   }, [activeSubTab]);
 
   useEffect(() => {
-    // Center selected month button smoothly
-    const activeBtn = monthButtonsRef.current[12 + selectedSeasonalMonth];
-    if (activeBtn && seasonalMonthContainerRef.current) {
-      activeBtn.scrollIntoView({
-        behavior: 'smooth',
-        inline: 'center',
-        block: 'nearest'
-      });
-    }
-  }, [selectedSeasonalMonth, activeSubTab]);
+    if (!isSeasonalExpanded) return;
+    const timer = setTimeout(() => {
+      const activeBtn = monthButtonsRef.current[12 + selectedSeasonalMonth];
+      const container = seasonalMonthContainerRef.current;
+      if (activeBtn && container) {
+        const btnLeft = activeBtn.offsetLeft;
+        const btnWidth = activeBtn.offsetWidth;
+        const containerWidth = container.clientWidth;
+        const targetScrollLeft = btnLeft - containerWidth / 2 + btnWidth / 2;
+        container.scrollTo({
+          left: targetScrollLeft,
+          behavior: 'smooth'
+        });
+      }
+    }, 50);
+    return () => clearTimeout(timer);
+  }, [selectedSeasonalMonth, activeSubTab, isSeasonalExpanded]);
 
   const handleSeasonalScroll = () => {
     const container = seasonalMonthContainerRef.current;
@@ -552,7 +559,7 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
                 <Leaf className="w-3.5 h-3.5 text-emerald-300" />
                 <span>Prodotti Consigliati a {MONTHLY_SEASONAL_PRODUCE[new Date().getMonth()].monthName}:</span>
               </span>
-              <span className="text-[10px] text-emerald-300 italic">Genera 5 Ricette</span>
+              <span className="text-[10px] text-emerald-300 italic">Ricette</span>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-[5px]">
               {MONTHLY_SEASONAL_PRODUCE[new Date().getMonth()].items.slice(0, 6).map((item, idx) => (
@@ -565,7 +572,7 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
                     <SeasonalIcon icon={item.icon} className="w-4 h-4 text-[#f37021] shrink-0" />
                     <span className="text-[10px] font-bold truncate">{item.name}</span>
                   </div>
-                  <Sparkles className="w-3 h-3 text-emerald-300 group-hover:text-white shrink-0" />
+                  <BookOpen className="w-3 h-3 text-emerald-300 group-hover:text-white shrink-0" />
                 </button>
               ))}
             </div>
@@ -805,7 +812,7 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
                 <span>Sett. Prec.</span>
               </button>
 
-              <div className="text-center px-[6px]">
+              <div className="text-center px-[4px]">
                 <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#f37021] block leading-none">
                   {weekOffset === 0
                     ? 'Settimana Corrente'
@@ -827,11 +834,11 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
               </button>
             </div>
 
-            {/* Quick Week Selectors */}
-            <div className="flex items-center gap-[4px] overflow-x-auto w-full md:w-auto pb-1 md:pb-0 scrollbar-none justify-start md:justify-end">
+            {/* Quick Week Selectors (Up to +2 weeks, fitted in 3 columns) */}
+            <div className="grid grid-cols-3 gap-[5px] w-full md:w-auto">
               <button
                 onClick={() => setWeekOffset(0)}
-                className={`p-[5px] px-[9px] rounded-md text-[11px] font-extrabold whitespace-nowrap transition-all ${
+                className={`p-[5px] px-[4px] rounded-md text-[10px] sm:text-[11px] font-extrabold text-center transition-all truncate ${
                   weekOffset === 0
                     ? 'bg-[#191970] text-white border border-[#191970] shadow-2xs'
                     : 'bg-slate-50 text-slate-700 border border-slate-300 hover:bg-slate-100'
@@ -841,7 +848,7 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
               </button>
               <button
                 onClick={() => setWeekOffset(1)}
-                className={`p-[5px] px-[9px] rounded-md text-[11px] font-extrabold whitespace-nowrap transition-all ${
+                className={`p-[5px] px-[4px] rounded-md text-[10px] sm:text-[11px] font-extrabold text-center transition-all truncate ${
                   weekOffset === 1
                     ? 'bg-[#f37021] text-white border border-[#f37021] shadow-2xs'
                     : 'bg-slate-50 text-slate-700 border border-slate-300 hover:bg-slate-100'
@@ -851,23 +858,13 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
               </button>
               <button
                 onClick={() => setWeekOffset(2)}
-                className={`p-[5px] px-[9px] rounded-md text-[11px] font-extrabold whitespace-nowrap transition-all ${
+                className={`p-[5px] px-[4px] rounded-md text-[10px] sm:text-[11px] font-extrabold text-center transition-all truncate ${
                   weekOffset === 2
                     ? 'bg-[#f37021] text-white border border-[#f37021] shadow-2xs'
                     : 'bg-slate-50 text-slate-700 border border-slate-300 hover:bg-slate-100'
                 }`}
               >
                 Tra 2 Sett. (+2)
-              </button>
-              <button
-                onClick={() => setWeekOffset(3)}
-                className={`p-[5px] px-[9px] rounded-md text-[11px] font-extrabold whitespace-nowrap transition-all ${
-                  weekOffset === 3
-                    ? 'bg-[#f37021] text-white border border-[#f37021] shadow-2xs'
-                    : 'bg-slate-50 text-slate-700 border border-slate-300 hover:bg-slate-100'
-                }`}
-              >
-                Tra 3 Sett. (+3)
               </button>
             </div>
           </div>
@@ -1548,7 +1545,7 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
               <div className="flex items-center gap-[6px] shrink-0">
                 <Leaf className="w-5 h-5 text-emerald-300 shrink-0" />
                 <h4 className="font-extrabold text-xs sm:text-sm text-emerald-100 whitespace-nowrap">
-                  {isSeasonalExpanded ? 'Prodotti stagionali' : 'prodotti di stagione'}
+                  PRODOTTI DI STAGIONE
                 </h4>
               </div>
 
@@ -1558,7 +1555,7 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
                   {MONTHLY_SEASONAL_PRODUCE[selectedSeasonalMonth].items.map((item, idx) => (
                     <div
                       key={idx}
-                      className="flex items-center gap-[3px] bg-emerald-950/70 p-[2px] px-[4px] rounded border border-emerald-700/60 shrink-0"
+                      className="flex items-center gap-[3px] shrink-0"
                       title={item.name}
                     >
                       <SeasonalIcon icon={item.icon} className="w-4 h-4 text-[#f37021]" />
@@ -1636,8 +1633,8 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
                             <h5 className="font-extrabold text-[11px] sm:text-xs text-white leading-tight">{item.name}</h5>
                           </div>
                           <p className="text-[9px] sm:text-[10px] text-emerald-200 leading-tight">{item.description}</p>
-                          <div className="text-[8px] sm:text-[9px] font-bold text-emerald-300 bg-emerald-950/80 p-[5px] rounded border border-emerald-800">
-                            ✨ {item.benefits}
+                          <div className="text-[8px] sm:text-[9px] font-bold text-white">
+                            {item.benefits}
                           </div>
                         </div>
 
@@ -1646,10 +1643,10 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
                             e.stopPropagation();
                             setSeasonalItemFor5Recipes(item);
                           }}
-                          className="w-full p-[5px] bg-[#f37021] hover:bg-[#d95d13] text-white font-bold text-[9px] sm:text-[10px] rounded flex items-center justify-center gap-[5px] shadow-2xs transition-colors mt-[2px]"
+                          className="w-full p-[5px] border-2 border-[#f37021] bg-transparent hover:bg-[#f37021]/20 text-white font-extrabold text-[10px] sm:text-[11px] rounded flex items-center justify-center gap-[5px] transition-colors"
                         >
-                          <Sparkles className="w-3.5 h-3.5 text-amber-300 shrink-0" />
-                          <span className="truncate">Genera 5 Ricette</span>
+                          <BookOpen className="w-3.5 h-3.5 text-white shrink-0" />
+                          <span className="truncate">Ricette</span>
                         </button>
                       </div>
                     ))}
