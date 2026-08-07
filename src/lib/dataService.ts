@@ -79,76 +79,49 @@ function logFirestoreError(error: unknown, operation: string, path: string) {
 // ==========================================
 export async function seedInitialData(forceReset = false): Promise<void> {
   const isSeeded = localStorage.getItem(STORAGE_KEYS.SEEDED);
-  const localRecipes = getLocalRecipes();
-  const localMenu = getLocalWeeklyMenu();
-  const localShopping = getLocalShoppingList();
-  const localPantry = getLocalPantryItems();
 
-  if (!isSeeded || forceReset || localRecipes.length === 0) {
+  if (forceReset) {
     localStorage.setItem(STORAGE_KEYS.RECIPES, JSON.stringify(INITIAL_RECIPES));
-  }
-  if (!isSeeded || forceReset || localMenu.length === 0) {
     localStorage.setItem(STORAGE_KEYS.WEEKLY_MENU, JSON.stringify(INITIAL_WEEKLY_MENU));
-  }
-  if (!isSeeded || forceReset || localShopping.length === 0) {
     localStorage.setItem(STORAGE_KEYS.SHOPPING_LIST, JSON.stringify(INITIAL_SHOPPING_LIST));
-  }
-  if (!isSeeded || forceReset || localPantry.length === 0) {
     localStorage.setItem(STORAGE_KEYS.PANTRY, JSON.stringify(INITIAL_PANTRY_ITEMS));
+    localStorage.setItem(STORAGE_KEYS.SEEDED, 'true');
+    notifyLocalChange();
+  } else if (!isSeeded) {
+    localStorage.setItem(STORAGE_KEYS.RECIPES, JSON.stringify(INITIAL_RECIPES));
+    localStorage.setItem(STORAGE_KEYS.WEEKLY_MENU, JSON.stringify(INITIAL_WEEKLY_MENU));
+    localStorage.setItem(STORAGE_KEYS.SHOPPING_LIST, JSON.stringify(INITIAL_SHOPPING_LIST));
+    localStorage.setItem(STORAGE_KEYS.PANTRY, JSON.stringify(INITIAL_PANTRY_ITEMS));
+    localStorage.setItem(STORAGE_KEYS.SEEDED, 'true');
+    notifyLocalChange();
   }
 
-  localStorage.setItem(STORAGE_KEYS.SEEDED, 'true');
-  notifyLocalChange();
-
-  // Seed Firestore
-  if (isFirebaseConfigured && db) {
+  // Seed Firestore ONLY if forceReset or if brand new unseeded setup
+  if (isFirebaseConfigured && db && (forceReset || !isSeeded)) {
     try {
-      const batch = writeBatch(db);
-      let needsCommit = false;
-
-      const pantrySnap = await getDocs(collection(db, 'pantry'));
-      if (pantrySnap.empty || forceReset) {
-        const pantryToSeed = getLocalPantryItems();
-        const items = pantryToSeed.length > 0 ? pantryToSeed : INITIAL_PANTRY_ITEMS;
-        for (const item of items) {
-          batch.set(doc(db, 'pantry', item.id), cleanData(item));
-        }
-        needsCommit = true;
-      }
-
       const recipesSnap = await getDocs(collection(db, 'recipes'));
-      if (recipesSnap.empty || forceReset) {
-        const recipesToSeed = getLocalRecipes();
-        const items = recipesToSeed.length > 0 ? recipesToSeed : INITIAL_RECIPES;
-        for (const recipe of items) {
+      const menuSnap = await getDocs(collection(db, 'weekly_menu'));
+      const pantrySnap = await getDocs(collection(db, 'pantry'));
+      const shopSnap = await getDocs(collection(db, 'shopping_list'));
+
+      const isFirestoreEmpty = recipesSnap.empty && menuSnap.empty && pantrySnap.empty && shopSnap.empty;
+
+      if (isFirestoreEmpty || forceReset) {
+        const batch = writeBatch(db);
+        for (const recipe of INITIAL_RECIPES) {
           batch.set(doc(db, 'recipes', recipe.id), cleanData(recipe));
         }
-        needsCommit = true;
-      }
-
-      const menuSnap = await getDocs(collection(db, 'weekly_menu'));
-      if (menuSnap.empty || forceReset) {
-        const menuToSeed = getLocalWeeklyMenu();
-        const items = menuToSeed.length > 0 ? menuToSeed : INITIAL_WEEKLY_MENU;
-        for (const menuItem of items) {
+        for (const menuItem of INITIAL_WEEKLY_MENU) {
           batch.set(doc(db, 'weekly_menu', menuItem.id), cleanData(menuItem));
         }
-        needsCommit = true;
-      }
-
-      const shopSnap = await getDocs(collection(db, 'shopping_list'));
-      if (shopSnap.empty || forceReset) {
-        const shopToSeed = getLocalShoppingList();
-        const items = shopToSeed.length > 0 ? shopToSeed : INITIAL_SHOPPING_LIST;
-        for (const shopItem of items) {
+        for (const item of INITIAL_PANTRY_ITEMS) {
+          batch.set(doc(db, 'pantry', item.id), cleanData(item));
+        }
+        for (const shopItem of INITIAL_SHOPPING_LIST) {
           batch.set(doc(db, 'shopping_list', shopItem.id), cleanData(shopItem));
         }
-        needsCommit = true;
-      }
-
-      if (needsCommit) {
         await batch.commit();
-        console.log('✅ Inizializzazione collezioni Firestore completata!');
+        console.log('✅ Inizializzazione Firestore completata con dati iniziali!');
       }
     } catch (err) {
       logFirestoreError(err, 'seedInitialData', 'shared');
@@ -161,7 +134,6 @@ export async function seedInitialData(forceReset = false): Promise<void> {
 // ==========================================
 
 export function subscribeToRecipes(callback: (recipes: Recipe[]) => void): () => void {
-  // Idratazione istantanea da localStorage
   callback(getLocalRecipes());
 
   const localHandler = () => callback(getLocalRecipes());
@@ -174,24 +146,12 @@ export function subscribeToRecipes(callback: (recipes: Recipe[]) => void): () =>
     unsubFirestore = onSnapshot(
       collection(db, 'recipes'),
       (snapshot) => {
-        if (!snapshot.empty) {
-          const firestoreRecipes: Recipe[] = [];
-          snapshot.forEach((docSnap) => {
-            firestoreRecipes.push({ id: docSnap.id, ...docSnap.data() } as Recipe);
-          });
-          localStorage.setItem(STORAGE_KEYS.RECIPES, JSON.stringify(firestoreRecipes));
-          callback(firestoreRecipes);
-        } else {
-          const local = getLocalRecipes();
-          if (local.length > 0) {
-            callback(local);
-            local.forEach((r) => {
-              setDoc(doc(db, 'recipes', r.id), cleanData(r), { merge: true }).catch(() => {});
-            });
-          } else {
-            callback([]);
-          }
-        }
+        const firestoreRecipes: Recipe[] = [];
+        snapshot.forEach((docSnap) => {
+          firestoreRecipes.push({ id: docSnap.id, ...docSnap.data() } as Recipe);
+        });
+        localStorage.setItem(STORAGE_KEYS.RECIPES, JSON.stringify(firestoreRecipes));
+        callback(firestoreRecipes);
       },
       (err) => logFirestoreError(err, 'subscribeToRecipes', 'recipes')
     );
@@ -205,7 +165,6 @@ export function subscribeToRecipes(callback: (recipes: Recipe[]) => void): () =>
 }
 
 export function subscribeToWeeklyMenu(callback: (menu: WeeklyMenuItem[]) => void): () => void {
-  // Idratazione istantanea da localStorage
   callback(getLocalWeeklyMenu());
 
   const localHandler = () => callback(getLocalWeeklyMenu());
@@ -218,24 +177,12 @@ export function subscribeToWeeklyMenu(callback: (menu: WeeklyMenuItem[]) => void
     unsubFirestore = onSnapshot(
       collection(db, 'weekly_menu'),
       (snapshot) => {
-        if (!snapshot.empty) {
-          const firestoreMenu: WeeklyMenuItem[] = [];
-          snapshot.forEach((docSnap) => {
-            firestoreMenu.push({ id: docSnap.id, ...docSnap.data() } as WeeklyMenuItem);
-          });
-          localStorage.setItem(STORAGE_KEYS.WEEKLY_MENU, JSON.stringify(firestoreMenu));
-          callback(firestoreMenu);
-        } else {
-          const local = getLocalWeeklyMenu();
-          if (local.length > 0) {
-            callback(local);
-            local.forEach((m) => {
-              setDoc(doc(db, 'weekly_menu', m.id), cleanData(m), { merge: true }).catch(() => {});
-            });
-          } else {
-            callback([]);
-          }
-        }
+        const firestoreMenu: WeeklyMenuItem[] = [];
+        snapshot.forEach((docSnap) => {
+          firestoreMenu.push({ id: docSnap.id, ...docSnap.data() } as WeeklyMenuItem);
+        });
+        localStorage.setItem(STORAGE_KEYS.WEEKLY_MENU, JSON.stringify(firestoreMenu));
+        callback(firestoreMenu);
       },
       (err) => logFirestoreError(err, 'subscribeToWeeklyMenu', 'weekly_menu')
     );
@@ -249,7 +196,6 @@ export function subscribeToWeeklyMenu(callback: (menu: WeeklyMenuItem[]) => void
 }
 
 export function subscribeToShoppingList(callback: (items: ShoppingListItem[]) => void): () => void {
-  // Idratazione istantanea da localStorage
   callback(getLocalShoppingList());
 
   const localHandler = () => callback(getLocalShoppingList());
@@ -262,24 +208,12 @@ export function subscribeToShoppingList(callback: (items: ShoppingListItem[]) =>
     unsubFirestore = onSnapshot(
       collection(db, 'shopping_list'),
       (snapshot) => {
-        if (!snapshot.empty) {
-          const firestoreShopping: ShoppingListItem[] = [];
-          snapshot.forEach((docSnap) => {
-            firestoreShopping.push({ id: docSnap.id, ...docSnap.data() } as ShoppingListItem);
-          });
-          localStorage.setItem(STORAGE_KEYS.SHOPPING_LIST, JSON.stringify(firestoreShopping));
-          callback(firestoreShopping);
-        } else {
-          const local = getLocalShoppingList();
-          if (local.length > 0) {
-            callback(local);
-            local.forEach((item) => {
-              setDoc(doc(db, 'shopping_list', item.id), cleanData(item), { merge: true }).catch(() => {});
-            });
-          } else {
-            callback([]);
-          }
-        }
+        const firestoreShopping: ShoppingListItem[] = [];
+        snapshot.forEach((docSnap) => {
+          firestoreShopping.push({ id: docSnap.id, ...docSnap.data() } as ShoppingListItem);
+        });
+        localStorage.setItem(STORAGE_KEYS.SHOPPING_LIST, JSON.stringify(firestoreShopping));
+        callback(firestoreShopping);
       },
       (err) => logFirestoreError(err, 'subscribeToShoppingList', 'shopping_list')
     );
@@ -293,7 +227,6 @@ export function subscribeToShoppingList(callback: (items: ShoppingListItem[]) =>
 }
 
 export function subscribeToPantryItems(callback: (items: PantryItem[]) => void): () => void {
-  // Idratazione istantanea da localStorage
   callback(getLocalPantryItems());
 
   const localHandler = () => callback(getLocalPantryItems());
@@ -306,29 +239,17 @@ export function subscribeToPantryItems(callback: (items: PantryItem[]) => void):
     unsubFirestore = onSnapshot(
       collection(db, 'pantry'),
       (snapshot) => {
-        if (!snapshot.empty) {
-          const firestoreItems: PantryItem[] = [];
-          snapshot.forEach((docSnap) => {
-            let data = docSnap.data() as PantryItem;
-            let cat = data.category;
-            if (cat && typeof cat === 'string' && cat.includes('font-bold')) {
-              cat = cat.includes('Freezer') ? 'Freezer' : 'Frigo';
-            }
-            firestoreItems.push({ ...data, id: docSnap.id, category: (cat || 'Frigo') as any });
-          });
-          localStorage.setItem(STORAGE_KEYS.PANTRY, JSON.stringify(firestoreItems));
-          callback(firestoreItems);
-        } else {
-          const local = getLocalPantryItems();
-          if (local.length > 0) {
-            callback(local);
-            local.forEach((item) => {
-              setDoc(doc(db, 'pantry', item.id), cleanData(item), { merge: true }).catch(() => {});
-            });
-          } else {
-            callback([]);
+        const firestoreItems: PantryItem[] = [];
+        snapshot.forEach((docSnap) => {
+          let data = docSnap.data() as PantryItem;
+          let cat = data.category;
+          if (cat && typeof cat === 'string' && cat.includes('font-bold')) {
+            cat = cat.includes('Freezer') ? 'Freezer' : 'Frigo';
           }
-        }
+          firestoreItems.push({ ...data, id: docSnap.id, category: (cat || 'Frigo') as any });
+        });
+        localStorage.setItem(STORAGE_KEYS.PANTRY, JSON.stringify(firestoreItems));
+        callback(firestoreItems);
       },
       (err) => logFirestoreError(err, 'subscribeToPantryItems', 'pantry')
     );
@@ -346,54 +267,70 @@ export function subscribeToPantryItems(callback: (items: PantryItem[]) => void):
 // ==========================================
 function getLocalRecipes(): Recipe[] {
   const data = localStorage.getItem(STORAGE_KEYS.RECIPES);
+  const isSeeded = localStorage.getItem(STORAGE_KEYS.SEEDED);
   if (data === null) {
-    localStorage.setItem(STORAGE_KEYS.RECIPES, JSON.stringify(INITIAL_RECIPES));
-    return INITIAL_RECIPES;
+    if (!isSeeded) {
+      localStorage.setItem(STORAGE_KEYS.RECIPES, JSON.stringify(INITIAL_RECIPES));
+      return INITIAL_RECIPES;
+    }
+    return [];
   }
   try {
     return JSON.parse(data);
   } catch (e) {
-    return INITIAL_RECIPES;
+    return [];
   }
 }
 
 function getLocalWeeklyMenu(): WeeklyMenuItem[] {
   const data = localStorage.getItem(STORAGE_KEYS.WEEKLY_MENU);
+  const isSeeded = localStorage.getItem(STORAGE_KEYS.SEEDED);
   if (data === null) {
-    localStorage.setItem(STORAGE_KEYS.WEEKLY_MENU, JSON.stringify(INITIAL_WEEKLY_MENU));
-    return INITIAL_WEEKLY_MENU;
+    if (!isSeeded) {
+      localStorage.setItem(STORAGE_KEYS.WEEKLY_MENU, JSON.stringify(INITIAL_WEEKLY_MENU));
+      return INITIAL_WEEKLY_MENU;
+    }
+    return [];
   }
   try {
     return JSON.parse(data);
   } catch (e) {
-    return INITIAL_WEEKLY_MENU;
+    return [];
   }
 }
 
 function getLocalShoppingList(): ShoppingListItem[] {
   const data = localStorage.getItem(STORAGE_KEYS.SHOPPING_LIST);
+  const isSeeded = localStorage.getItem(STORAGE_KEYS.SEEDED);
   if (data === null) {
-    localStorage.setItem(STORAGE_KEYS.SHOPPING_LIST, JSON.stringify(INITIAL_SHOPPING_LIST));
-    return INITIAL_SHOPPING_LIST;
+    if (!isSeeded) {
+      localStorage.setItem(STORAGE_KEYS.SHOPPING_LIST, JSON.stringify(INITIAL_SHOPPING_LIST));
+      return INITIAL_SHOPPING_LIST;
+    }
+    return [];
   }
   try {
     return JSON.parse(data);
   } catch (e) {
-    return INITIAL_SHOPPING_LIST;
+    return [];
   }
 }
 
 export function getLocalPantryItems(): PantryItem[] {
   const data = localStorage.getItem(STORAGE_KEYS.PANTRY);
+  const isSeeded = localStorage.getItem(STORAGE_KEYS.SEEDED);
   if (data === null) {
-    localStorage.setItem(STORAGE_KEYS.PANTRY, JSON.stringify(INITIAL_PANTRY_ITEMS));
-    return INITIAL_PANTRY_ITEMS;
+    if (!isSeeded) {
+      localStorage.setItem(STORAGE_KEYS.PANTRY, JSON.stringify(INITIAL_PANTRY_ITEMS));
+      return INITIAL_PANTRY_ITEMS;
+    }
+    return [];
   }
   let items: PantryItem[] = [];
   try {
     items = JSON.parse(data);
   } catch (e) {
-    items = INITIAL_PANTRY_ITEMS;
+    return [];
   }
   return items.map((item) => {
     let cat = item.category;
