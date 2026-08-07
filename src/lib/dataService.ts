@@ -407,7 +407,7 @@ export async function addWeeklyMenuItem(
 
   if (isFirebaseConfigured && db) {
     try {
-      await setDoc(doc(db, 'weekly_menu', slotId), cleanData(menuItem));
+      await setDoc(doc(db, 'weekly_menu', slotId), cleanData(menuItem), { merge: true });
     } catch (err) {
       logFirestoreError(err, 'addWeeklyMenuItem', `weekly_menu/${slotId}`);
     }
@@ -429,7 +429,7 @@ export async function updateWeeklyMenuItemDetails(
 
     if (isFirebaseConfigured && db) {
       try {
-        await updateDoc(doc(db, 'weekly_menu', slotId), cleanData({ notes: item.notes, dosages: item.dosages }));
+        await setDoc(doc(db, 'weekly_menu', slotId), cleanData(item), { merge: true });
       } catch (err) {
         logFirestoreError(err, 'updateWeeklyMenuItemDetails', `weekly_menu/${slotId}`);
       }
@@ -505,13 +505,13 @@ export async function toggleShoppingItem(itemId: string, currentStatus: boolean)
     item.isChecked = !currentStatus;
     localStorage.setItem(STORAGE_KEYS.SHOPPING_LIST, JSON.stringify(items));
     notifyLocalChange();
-  }
 
-  if (isFirebaseConfigured && db) {
-    try {
-      await updateDoc(doc(db, 'shopping_list', itemId), { isChecked: !currentStatus });
-    } catch (err) {
-      logFirestoreError(err, 'toggleShoppingItem', `shopping_list/${itemId}`);
+    if (isFirebaseConfigured && db) {
+      try {
+        await setDoc(doc(db, 'shopping_list', itemId), cleanData(item), { merge: true });
+      } catch (err) {
+        logFirestoreError(err, 'toggleShoppingItem', `shopping_list/${itemId}`);
+      }
     }
   }
 }

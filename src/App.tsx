@@ -65,36 +65,44 @@ export default function App() {
 
   // Initialize data and setup real-time subscriptions
   useEffect(() => {
-    let unsubRecipes: () => void;
-    let unsubMenu: () => void;
-    let unsubShopping: () => void;
-    let unsubPantry: () => void;
+    let unsubRecipes: () => void = () => {};
+    let unsubMenu: () => void = () => {};
+    let unsubShopping: () => void = () => {};
+    let unsubPantry: () => void = () => {};
 
     // Safety timer to prevent spinner hanging forever
     const loadingTimeout = setTimeout(() => {
       setIsLoading(false);
     }, 1500);
 
-    // Subscribe immediately to real-time streams (instant UI hydration)
-    unsubRecipes = subscribeToRecipes((data) => {
-      setRecipes(data);
-      setIsLoading(false);
-    });
+    const initDataAndSubscriptions = async () => {
+      // Ensure initial demo data exists in Firestore before setup
+      try {
+        await seedInitialData();
+      } catch (err) {
+        console.warn('Seed notice:', err);
+      }
 
-    unsubMenu = subscribeToWeeklyMenu((data) => {
-      setWeeklyMenu(data);
-    });
+      // Subscribe to real-time streams (instant UI hydration & remote sync)
+      unsubRecipes = subscribeToRecipes((data) => {
+        setRecipes(data);
+        setIsLoading(false);
+      });
 
-    unsubShopping = subscribeToShoppingList((data) => {
-      setShoppingList(data);
-    });
+      unsubMenu = subscribeToWeeklyMenu((data) => {
+        setWeeklyMenu(data);
+      });
 
-    unsubPantry = subscribeToPantryItems((data) => {
-      setPantryItems(data);
-    });
+      unsubShopping = subscribeToShoppingList((data) => {
+        setShoppingList(data);
+      });
 
-    // Ensure initial demo data exists in background without blocking streams
-    seedInitialData().catch((err) => console.warn('Seed notice:', err));
+      unsubPantry = subscribeToPantryItems((data) => {
+        setPantryItems(data);
+      });
+    };
+
+    initDataAndSubscriptions();
 
     return () => {
       clearTimeout(loadingTimeout);
