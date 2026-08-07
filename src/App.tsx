@@ -75,34 +75,26 @@ export default function App() {
       setIsLoading(false);
     }, 1500);
 
-    const initDataAndSubscriptions = async () => {
-      // Ensure initial demo data exists in Firestore before setup
-      try {
-        await seedInitialData();
-      } catch (err) {
-        console.warn('Seed notice:', err);
-      }
+    // 1. Subscribe IMMEDIATELY on mount (instant UI hydration & real-time sync)
+    unsubRecipes = subscribeToRecipes((data) => {
+      setRecipes(data);
+      setIsLoading(false);
+    });
 
-      // Subscribe to real-time streams (instant UI hydration & remote sync)
-      unsubRecipes = subscribeToRecipes((data) => {
-        setRecipes(data);
-        setIsLoading(false);
-      });
+    unsubMenu = subscribeToWeeklyMenu((data) => {
+      setWeeklyMenu(data);
+    });
 
-      unsubMenu = subscribeToWeeklyMenu((data) => {
-        setWeeklyMenu(data);
-      });
+    unsubShopping = subscribeToShoppingList((data) => {
+      setShoppingList(data);
+    });
 
-      unsubShopping = subscribeToShoppingList((data) => {
-        setShoppingList(data);
-      });
+    unsubPantry = subscribeToPantryItems((data) => {
+      setPantryItems(data);
+    });
 
-      unsubPantry = subscribeToPantryItems((data) => {
-        setPantryItems(data);
-      });
-    };
-
-    initDataAndSubscriptions();
+    // 2. Ensure initial seed data exists in background without blocking UI subscriptions
+    seedInitialData().catch((err) => console.warn('Seed notice:', err));
 
     return () => {
       clearTimeout(loadingTimeout);

@@ -79,15 +79,26 @@ function logFirestoreError(error: unknown, operation: string, path: string) {
 // ==========================================
 export async function seedInitialData(forceReset = false): Promise<void> {
   const isSeeded = localStorage.getItem(STORAGE_KEYS.SEEDED);
+  const localRecipes = getLocalRecipes();
+  const localMenu = getLocalWeeklyMenu();
+  const localShopping = getLocalShoppingList();
+  const localPantry = getLocalPantryItems();
 
-  if (!isSeeded || forceReset) {
+  if (!isSeeded || forceReset || localRecipes.length === 0) {
     localStorage.setItem(STORAGE_KEYS.RECIPES, JSON.stringify(INITIAL_RECIPES));
-    localStorage.setItem(STORAGE_KEYS.WEEKLY_MENU, JSON.stringify(INITIAL_WEEKLY_MENU));
-    localStorage.setItem(STORAGE_KEYS.SHOPPING_LIST, JSON.stringify(INITIAL_SHOPPING_LIST));
-    localStorage.setItem(STORAGE_KEYS.PANTRY, JSON.stringify(INITIAL_PANTRY_ITEMS));
-    localStorage.setItem(STORAGE_KEYS.SEEDED, 'true');
-    notifyLocalChange();
   }
+  if (!isSeeded || forceReset || localMenu.length === 0) {
+    localStorage.setItem(STORAGE_KEYS.WEEKLY_MENU, JSON.stringify(INITIAL_WEEKLY_MENU));
+  }
+  if (!isSeeded || forceReset || localShopping.length === 0) {
+    localStorage.setItem(STORAGE_KEYS.SHOPPING_LIST, JSON.stringify(INITIAL_SHOPPING_LIST));
+  }
+  if (!isSeeded || forceReset || localPantry.length === 0) {
+    localStorage.setItem(STORAGE_KEYS.PANTRY, JSON.stringify(INITIAL_PANTRY_ITEMS));
+  }
+
+  localStorage.setItem(STORAGE_KEYS.SEEDED, 'true');
+  notifyLocalChange();
 
   // Seed Firestore
   if (isFirebaseConfigured && db) {
@@ -98,7 +109,8 @@ export async function seedInitialData(forceReset = false): Promise<void> {
       const pantrySnap = await getDocs(collection(db, 'pantry'));
       if (pantrySnap.empty || forceReset) {
         const pantryToSeed = getLocalPantryItems();
-        for (const item of pantryToSeed) {
+        const items = pantryToSeed.length > 0 ? pantryToSeed : INITIAL_PANTRY_ITEMS;
+        for (const item of items) {
           batch.set(doc(db, 'pantry', item.id), cleanData(item));
         }
         needsCommit = true;
@@ -106,7 +118,9 @@ export async function seedInitialData(forceReset = false): Promise<void> {
 
       const recipesSnap = await getDocs(collection(db, 'recipes'));
       if (recipesSnap.empty || forceReset) {
-        for (const recipe of INITIAL_RECIPES) {
+        const recipesToSeed = getLocalRecipes();
+        const items = recipesToSeed.length > 0 ? recipesToSeed : INITIAL_RECIPES;
+        for (const recipe of items) {
           batch.set(doc(db, 'recipes', recipe.id), cleanData(recipe));
         }
         needsCommit = true;
@@ -114,7 +128,9 @@ export async function seedInitialData(forceReset = false): Promise<void> {
 
       const menuSnap = await getDocs(collection(db, 'weekly_menu'));
       if (menuSnap.empty || forceReset) {
-        for (const menuItem of INITIAL_WEEKLY_MENU) {
+        const menuToSeed = getLocalWeeklyMenu();
+        const items = menuToSeed.length > 0 ? menuToSeed : INITIAL_WEEKLY_MENU;
+        for (const menuItem of items) {
           batch.set(doc(db, 'weekly_menu', menuItem.id), cleanData(menuItem));
         }
         needsCommit = true;
@@ -122,7 +138,9 @@ export async function seedInitialData(forceReset = false): Promise<void> {
 
       const shopSnap = await getDocs(collection(db, 'shopping_list'));
       if (shopSnap.empty || forceReset) {
-        for (const shopItem of INITIAL_SHOPPING_LIST) {
+        const shopToSeed = getLocalShoppingList();
+        const items = shopToSeed.length > 0 ? shopToSeed : INITIAL_SHOPPING_LIST;
+        for (const shopItem of items) {
           batch.set(doc(db, 'shopping_list', shopItem.id), cleanData(shopItem));
         }
         needsCommit = true;
@@ -156,12 +174,24 @@ export function subscribeToRecipes(callback: (recipes: Recipe[]) => void): () =>
     unsubFirestore = onSnapshot(
       collection(db, 'recipes'),
       (snapshot) => {
-        const firestoreRecipes: Recipe[] = [];
-        snapshot.forEach((docSnap) => {
-          firestoreRecipes.push({ id: docSnap.id, ...docSnap.data() } as Recipe);
-        });
-        localStorage.setItem(STORAGE_KEYS.RECIPES, JSON.stringify(firestoreRecipes));
-        callback(firestoreRecipes);
+        if (!snapshot.empty) {
+          const firestoreRecipes: Recipe[] = [];
+          snapshot.forEach((docSnap) => {
+            firestoreRecipes.push({ id: docSnap.id, ...docSnap.data() } as Recipe);
+          });
+          localStorage.setItem(STORAGE_KEYS.RECIPES, JSON.stringify(firestoreRecipes));
+          callback(firestoreRecipes);
+        } else {
+          const local = getLocalRecipes();
+          if (local.length > 0) {
+            callback(local);
+            local.forEach((r) => {
+              setDoc(doc(db, 'recipes', r.id), cleanData(r), { merge: true }).catch(() => {});
+            });
+          } else {
+            callback([]);
+          }
+        }
       },
       (err) => logFirestoreError(err, 'subscribeToRecipes', 'recipes')
     );
@@ -188,12 +218,24 @@ export function subscribeToWeeklyMenu(callback: (menu: WeeklyMenuItem[]) => void
     unsubFirestore = onSnapshot(
       collection(db, 'weekly_menu'),
       (snapshot) => {
-        const firestoreMenu: WeeklyMenuItem[] = [];
-        snapshot.forEach((docSnap) => {
-          firestoreMenu.push({ id: docSnap.id, ...docSnap.data() } as WeeklyMenuItem);
-        });
-        localStorage.setItem(STORAGE_KEYS.WEEKLY_MENU, JSON.stringify(firestoreMenu));
-        callback(firestoreMenu);
+        if (!snapshot.empty) {
+          const firestoreMenu: WeeklyMenuItem[] = [];
+          snapshot.forEach((docSnap) => {
+            firestoreMenu.push({ id: docSnap.id, ...docSnap.data() } as WeeklyMenuItem);
+          });
+          localStorage.setItem(STORAGE_KEYS.WEEKLY_MENU, JSON.stringify(firestoreMenu));
+          callback(firestoreMenu);
+        } else {
+          const local = getLocalWeeklyMenu();
+          if (local.length > 0) {
+            callback(local);
+            local.forEach((m) => {
+              setDoc(doc(db, 'weekly_menu', m.id), cleanData(m), { merge: true }).catch(() => {});
+            });
+          } else {
+            callback([]);
+          }
+        }
       },
       (err) => logFirestoreError(err, 'subscribeToWeeklyMenu', 'weekly_menu')
     );
@@ -220,12 +262,24 @@ export function subscribeToShoppingList(callback: (items: ShoppingListItem[]) =>
     unsubFirestore = onSnapshot(
       collection(db, 'shopping_list'),
       (snapshot) => {
-        const firestoreItems: ShoppingListItem[] = [];
-        snapshot.forEach((docSnap) => {
-          firestoreItems.push({ id: docSnap.id, ...docSnap.data() } as ShoppingListItem);
-        });
-        localStorage.setItem(STORAGE_KEYS.SHOPPING_LIST, JSON.stringify(firestoreItems));
-        callback(firestoreItems);
+        if (!snapshot.empty) {
+          const firestoreShopping: ShoppingListItem[] = [];
+          snapshot.forEach((docSnap) => {
+            firestoreShopping.push({ id: docSnap.id, ...docSnap.data() } as ShoppingListItem);
+          });
+          localStorage.setItem(STORAGE_KEYS.SHOPPING_LIST, JSON.stringify(firestoreShopping));
+          callback(firestoreShopping);
+        } else {
+          const local = getLocalShoppingList();
+          if (local.length > 0) {
+            callback(local);
+            local.forEach((item) => {
+              setDoc(doc(db, 'shopping_list', item.id), cleanData(item), { merge: true }).catch(() => {});
+            });
+          } else {
+            callback([]);
+          }
+        }
       },
       (err) => logFirestoreError(err, 'subscribeToShoppingList', 'shopping_list')
     );
@@ -252,17 +306,29 @@ export function subscribeToPantryItems(callback: (items: PantryItem[]) => void):
     unsubFirestore = onSnapshot(
       collection(db, 'pantry'),
       (snapshot) => {
-        const firestoreItems: PantryItem[] = [];
-        snapshot.forEach((docSnap) => {
-          let data = docSnap.data() as PantryItem;
-          let cat = data.category;
-          if (cat && typeof cat === 'string' && cat.includes('font-bold')) {
-            cat = cat.includes('Freezer') ? 'Freezer' : 'Frigo';
+        if (!snapshot.empty) {
+          const firestoreItems: PantryItem[] = [];
+          snapshot.forEach((docSnap) => {
+            let data = docSnap.data() as PantryItem;
+            let cat = data.category;
+            if (cat && typeof cat === 'string' && cat.includes('font-bold')) {
+              cat = cat.includes('Freezer') ? 'Freezer' : 'Frigo';
+            }
+            firestoreItems.push({ ...data, id: docSnap.id, category: (cat || 'Frigo') as any });
+          });
+          localStorage.setItem(STORAGE_KEYS.PANTRY, JSON.stringify(firestoreItems));
+          callback(firestoreItems);
+        } else {
+          const local = getLocalPantryItems();
+          if (local.length > 0) {
+            callback(local);
+            local.forEach((item) => {
+              setDoc(doc(db, 'pantry', item.id), cleanData(item), { merge: true }).catch(() => {});
+            });
+          } else {
+            callback([]);
           }
-          firestoreItems.push({ ...data, id: docSnap.id, category: (cat || 'Frigo') as any });
-        });
-        localStorage.setItem(STORAGE_KEYS.PANTRY, JSON.stringify(firestoreItems));
-        callback(firestoreItems);
+        }
       },
       (err) => logFirestoreError(err, 'subscribeToPantryItems', 'pantry')
     );
@@ -352,11 +418,9 @@ export async function saveRecipe(recipe: Recipe): Promise<void> {
   notifyLocalChange();
 
   if (isFirebaseConfigured && db) {
-    try {
-      await setDoc(doc(db, 'recipes', recipeId), cleanData(recipeToSave));
-    } catch (err) {
+    setDoc(doc(db, 'recipes', recipeId), cleanData(recipeToSave), { merge: true }).catch((err) => {
       logFirestoreError(err, 'saveRecipe', `recipes/${recipeId}`);
-    }
+    });
   }
 }
 
@@ -366,11 +430,9 @@ export async function deleteRecipe(recipeId: string): Promise<void> {
   notifyLocalChange();
 
   if (isFirebaseConfigured && db) {
-    try {
-      await deleteDoc(doc(db, 'recipes', recipeId));
-    } catch (err) {
+    deleteDoc(doc(db, 'recipes', recipeId)).catch((err) => {
       logFirestoreError(err, 'deleteRecipe', `recipes/${recipeId}`);
-    }
+    });
   }
 }
 
@@ -406,11 +468,9 @@ export async function addWeeklyMenuItem(
   notifyLocalChange();
 
   if (isFirebaseConfigured && db) {
-    try {
-      await setDoc(doc(db, 'weekly_menu', slotId), cleanData(menuItem), { merge: true });
-    } catch (err) {
+    setDoc(doc(db, 'weekly_menu', slotId), cleanData(menuItem), { merge: true }).catch((err) => {
       logFirestoreError(err, 'addWeeklyMenuItem', `weekly_menu/${slotId}`);
-    }
+    });
   }
 }
 
@@ -428,11 +488,9 @@ export async function updateWeeklyMenuItemDetails(
     notifyLocalChange();
 
     if (isFirebaseConfigured && db) {
-      try {
-        await setDoc(doc(db, 'weekly_menu', slotId), cleanData(item), { merge: true });
-      } catch (err) {
+      setDoc(doc(db, 'weekly_menu', slotId), cleanData(item), { merge: true }).catch((err) => {
         logFirestoreError(err, 'updateWeeklyMenuItemDetails', `weekly_menu/${slotId}`);
-      }
+      });
     }
   }
 }
@@ -453,11 +511,9 @@ export async function removeWeeklyMenuItem(itemId: string): Promise<void> {
   notifyLocalChange();
 
   if (isFirebaseConfigured && db) {
-    try {
-      await deleteDoc(doc(db, 'weekly_menu', itemId));
-    } catch (err) {
+    deleteDoc(doc(db, 'weekly_menu', itemId)).catch((err) => {
       logFirestoreError(err, 'removeWeeklyMenuItem', `weekly_menu/${itemId}`);
-    }
+    });
   }
 }
 
@@ -474,8 +530,7 @@ export async function removeWeeklySlot(
   notifyLocalChange();
 
   if (isFirebaseConfigured && db) {
-    try {
-      const snap = await getDocs(collection(db, 'weekly_menu'));
+    getDocs(collection(db, 'weekly_menu')).then((snap) => {
       const batch = writeBatch(db);
       let hasDeletes = false;
       snap.forEach((docSnap) => {
@@ -487,11 +542,9 @@ export async function removeWeeklySlot(
         }
       });
       if (hasDeletes) {
-        await batch.commit();
+        batch.commit().catch((err) => logFirestoreError(err, 'removeWeeklySlot.commit', 'weekly_menu'));
       }
-    } catch (err) {
-      logFirestoreError(err, 'removeWeeklySlot', 'weekly_menu');
-    }
+    }).catch((err) => logFirestoreError(err, 'removeWeeklySlot', 'weekly_menu'));
   }
 }
 
@@ -507,11 +560,9 @@ export async function toggleShoppingItem(itemId: string, currentStatus: boolean)
     notifyLocalChange();
 
     if (isFirebaseConfigured && db) {
-      try {
-        await setDoc(doc(db, 'shopping_list', itemId), cleanData(item), { merge: true });
-      } catch (err) {
+      setDoc(doc(db, 'shopping_list', itemId), cleanData(item), { merge: true }).catch((err) => {
         logFirestoreError(err, 'toggleShoppingItem', `shopping_list/${itemId}`);
-      }
+      });
     }
   }
 }
@@ -535,11 +586,9 @@ export async function addManualShoppingItem(ingredientName: string, quantity: nu
   notifyLocalChange();
 
   if (isFirebaseConfigured && db) {
-    try {
-      await setDoc(doc(db, 'shopping_list', newItemId), cleanData(newItem));
-    } catch (err) {
+    setDoc(doc(db, 'shopping_list', newItemId), cleanData(newItem), { merge: true }).catch((err) => {
       logFirestoreError(err, 'addManualShoppingItem', `shopping_list/${newItemId}`);
-    }
+    });
   }
 }
 
@@ -558,11 +607,9 @@ export async function removeShoppingItem(itemId: string, ingredientName?: string
   notifyLocalChange();
 
   if (isFirebaseConfigured && db) {
-    try {
-      await deleteDoc(doc(db, 'shopping_list', itemId));
-    } catch (err) {
+    deleteDoc(doc(db, 'shopping_list', itemId)).catch((err) => {
       logFirestoreError(err, 'removeShoppingItem', `shopping_list/${itemId}`);
-    }
+    });
   }
 }
 
@@ -572,8 +619,7 @@ export async function clearCheckedItems(): Promise<void> {
   notifyLocalChange();
 
   if (isFirebaseConfigured && db) {
-    try {
-      const snap = await getDocs(collection(db, 'shopping_list'));
+    getDocs(collection(db, 'shopping_list')).then((snap) => {
       const batch = writeBatch(db);
       let hasDeletes = false;
       snap.forEach((docSnap) => {
@@ -583,11 +629,9 @@ export async function clearCheckedItems(): Promise<void> {
         }
       });
       if (hasDeletes) {
-        await batch.commit();
+        batch.commit().catch((err) => logFirestoreError(err, 'clearCheckedItems.commit', 'shopping_list'));
       }
-    } catch (err) {
-      logFirestoreError(err, 'clearCheckedItems', 'shopping_list');
-    }
+    }).catch((err) => logFirestoreError(err, 'clearCheckedItems', 'shopping_list'));
   }
 }
 
@@ -727,12 +771,9 @@ export async function savePantryItem(item: PantryItem): Promise<void> {
 
   // 2. Firestore Sync
   if (isFirebaseConfigured && db) {
-    try {
-      await setDoc(doc(db, 'pantry', itemId), cleanData(itemToSave));
-      console.log('✅ Alimento salvato con successo su Firestore (Condiviso):', itemId);
-    } catch (err) {
+    setDoc(doc(db, 'pantry', itemId), cleanData(itemToSave), { merge: true }).catch((err) => {
       logFirestoreError(err, 'savePantryItem', `pantry/${itemId}`);
-    }
+    });
   }
 }
 
@@ -748,15 +789,12 @@ export async function deletePantryItem(itemId: string, itemName?: string): Promi
 
   // 2. Firestore Delete
   if (isFirebaseConfigured && db) {
-    try {
-      await deleteDoc(doc(db, 'pantry', itemId));
-    } catch (err) {
+    deleteDoc(doc(db, 'pantry', itemId)).catch((err) => {
       logFirestoreError(err, 'deletePantryItem', `pantry/${itemId}`);
-    }
+    });
 
     if (targetName) {
-      try {
-        const snap = await getDocs(collection(db, 'pantry'));
+      getDocs(collection(db, 'pantry')).then((snap) => {
         const batch = writeBatch(db);
         let hasDeletes = false;
         snap.forEach((docSnap) => {
@@ -768,11 +806,9 @@ export async function deletePantryItem(itemId: string, itemName?: string): Promi
           }
         });
         if (hasDeletes) {
-          await batch.commit();
+          batch.commit().catch((err) => logFirestoreError(err, 'deletePantryItemDuplicates.commit', 'pantry'));
         }
-      } catch (err) {
-        logFirestoreError(err, 'deletePantryItemDuplicates', 'pantry');
-      }
+      }).catch((err) => logFirestoreError(err, 'deletePantryItemDuplicates', 'pantry'));
     }
   }
 }
