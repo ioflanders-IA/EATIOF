@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Recipe, WeeklyMenuItem, ShoppingListItem, PantryItem, DayOfWeek, MealType, CategoryType, DishCourse, NutritionInfo } from '../types';
+import { Recipe, WeeklyMenuItem, ShoppingListItem, PantryItem, DayOfWeek, MealType, CategoryType, DishCourse, NutritionInfo, FamilyMember } from '../types';
 import { DAYS_OF_WEEK } from '../data/initialData';
 import { getFamilyConfig, FAMILY_CONFIG_CHANGED_EVENT } from '../lib/familyAuthService';
 import { MONTHLY_SEASONAL_PRODUCE, getSeasonalDataForMonth, inferCourseFromRecipe, SeasonalItem } from '../data/seasonalData';
 import { SeasonalIcon } from './SeasonalIcon';
+import { DailySummaryModal } from './DailySummaryModal';
 import {
   addWeeklyMenuItem,
   removeWeeklyMenuItem,
@@ -11,7 +12,9 @@ import {
   generateShoppingListFromMenu,
   deleteRecipe,
   subscribeToPantryItems,
-  saveRecipe
+  saveRecipe,
+  updateWeeklyMenuItemDetails,
+  cleanRecipeName
 } from '../lib/dataService';
 import { generate5RecipesForSeasonalItem, RecipeWithPantryCheck } from '../lib/seasonalRecipeGenerator';
 import {
@@ -43,7 +46,9 @@ import {
   Pencil,
   Leaf,
   Info,
-  Check
+  Check,
+  Scale,
+  Sliders
 } from 'lucide-react';
 
 interface PlannerViewProps {
@@ -155,6 +160,56 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
   const [pantryItems, setPantryItems] = useState<PantryItem[]>([]);
   const [seasonalItemFor5Recipes, setSeasonalItemFor5Recipes] = useState<SeasonalItem | null>(null);
   const [savedRecipeIds, setSavedRecipeIds] = useState<Set<string>>(new Set());
+
+  // State for Daily Summary Modal ("Riepilogo")
+  const [summaryModalData, setSummaryModalData] = useState<{
+    dayName: string;
+    dateStr: string;
+    lunchSlots: WeeklyMenuItem[];
+    dinnerSlots: WeeklyMenuItem[];
+  } | null>(null);
+  const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
+
+  // Modals for Recipe Preview & Dosimetro
+  const [inspectRecipe, setInspectRecipe] = useState<Recipe | null>(null);
+  const [dosimetroRecipe, setDosimetroRecipe] = useState<Recipe | null>(null);
+  const [dosages, setDosages] = useState<Record<string, number>>({});
+  const [dosimetroNote, setDosimetroNote] = useState<string>('');
+
+  // Standalone Dosimetro target selection when selectedSlot is null
+  const [dosimetroDay, setDosimetroDay] = useState<DayOfWeek>('Lunedì');
+  const [dosimetroMeal, setDosimetroMeal] = useState<MealType>('lunch');
+  const [dosimetroWeek, setDosimetroWeek] = useState<string>('current');
+  const [dosimetroSearchTerm, setDosimetroSearchTerm] = useState<string>('');
+
+  useEffect(() => {
+    getFamilyConfig().then((cfg) => {
+      if (cfg?.members) setFamilyMembers(cfg.members);
+    });
+    const handleCfgChange = (e: any) => {
+      if (e.detail?.members) setFamilyMembers(e.detail.members);
+    };
+    window.addEventListener(FAMILY_CONFIG_CHANGED_EVENT, handleCfgChange);
+    return () => window.removeEventListener(FAMILY_CONFIG_CHANGED_EVENT, handleCfgChange);
+  }, []);
+
+  // State & Ref for long-press dish deletion
+  const [deletingSlotId, setDeletingSlotId] = useState<string | null>(null);
+  const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handlePressStart = (id: string) => {
+    if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+    longPressTimerRef.current = setTimeout(() => {
+      setDeletingSlotId(id);
+    }, 500);
+  };
+
+  const handlePressEnd = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
 
   // Refs for Infinite Wheel Month Selector in Seasonal Advisor
   const seasonalMonthContainerRef = useRef<HTMLDivElement>(null);
@@ -288,6 +343,19 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
     await addWeeklyMenuItem(selectedSlot.day, selectedSlot.mealType, recipe.id, recipe.name, targetWeek);
     setSelectedSlot(null);
     setSearchQuery('');
+  };
+
+  const handleOpenDosimetro = (recipe: Recipe) => {
+    setDosimetroRecipe(recipe);
+    const initialDosages: Record<string, number> = {};
+    const members = familyMembers.length > 0
+      ? familyMembers.map((m) => m.name)
+      : (familyMembersList.length > 0 ? familyMembersList : ['Madre', 'Padre', 'Membro 1', 'Membro 2']);
+    members.forEach((name) => {
+      initialDosages[name] = 100;
+    });
+    setDosages(initialDosages);
+    setDosimetroNote('');
   };
 
   const handleRemoveMenuItem = async (itemId: string) => {
@@ -497,63 +565,404 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
     );
   }
 
-  // PAGE VIEW: DEDICATED RECIPE SELECTION FOR CALENDAR SLOT
-  if (selectedSlot) {
+  // PAGE VIEW: INSPECT RECIPE DETAILS
+  if (inspectRecipe) {
     return (
-      <div className="bg-white rounded-lg p-[10px] sm:p-[15px] border border-slate-200 shadow-md space-y-[12px] animate-fade-in min-h-[80vh]">
-        {/* Header */}
-        <div className="p-[10px] sm:p-[12px] bg-[#191970] text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-[10px] rounded-lg shadow-sm">
-          <div className="flex items-center gap-[10px]">
-            <button
-              onClick={() => setSelectedSlot(null)}
-              className="p-[6px] px-[12px] rounded-lg bg-white/10 hover:bg-white/20 text-white font-bold text-xs flex items-center gap-[5px] transition-colors border border-white/20 shrink-0"
-            >
-              <ChevronLeft className="w-4 h-4" />
-              <span>Torna al Calendario</span>
-            </button>
-            <div>
-              <h3 className="font-extrabold text-base sm:text-lg text-white">
-                Seleziona Ricetta per {selectedSlot.day} {selectedSlot.dateStr ? `(${selectedSlot.dateStr})` : ''}
-              </h3>
-              <p className="text-xs text-[#f37021] font-bold flex items-center gap-[5px] mt-[2px]">
-                {selectedSlot.mealType === 'lunch' ? (
-                  <>
-                    <Sun className="w-3.5 h-3.5 text-[#f37021]" />
-                    <span>Slot: Pranzo</span>
-                  </>
-                ) : (
-                  <>
-                    <Moon className="w-3.5 h-3.5 text-[#f37021]" />
-                    <span>Slot: Cena</span>
-                  </>
-                )}
-              </p>
-            </div>
+      <div className="bg-white rounded-lg p-[5px] border border-slate-200 shadow-md space-y-[5px] animate-fade-in min-h-[75vh]">
+        {/* Top Navigation Bar */}
+        <div className="p-[5px] bg-slate-100 border border-slate-200 rounded-lg flex items-center justify-between gap-[5px]">
+          <button
+            type="button"
+            onClick={() => setInspectRecipe(null)}
+            className="p-[5px] px-[10px] rounded-md bg-white hover:bg-slate-50 text-[#191970] font-extrabold text-xs flex items-center gap-[5px] border border-slate-300 shadow-2xs transition-all active:scale-95"
+          >
+            <ChevronLeft className="w-4 h-4 text-[#191970]" />
+            <span>Torna Indietro</span>
+          </button>
+
+          <span className="text-[11px] font-black uppercase tracking-wider px-[8px] py-[3px] rounded-full bg-[#191970] text-white">
+            {(inspectRecipe.course || inferCourseFromRecipe(inspectRecipe.name, inspectRecipe.category))} • {inspectRecipe.category}
+          </span>
+        </div>
+
+        {/* Recipe Title & Action Banner */}
+        <div className="bg-[#191970]/5 p-[5px] rounded-lg border border-[#191970]/15 flex flex-col sm:flex-row sm:items-center justify-between gap-[5px]">
+          <div>
+            <h2 className="font-extrabold text-[#191970] text-xl sm:text-2xl">
+              {inspectRecipe.name}
+            </h2>
+            <p className="text-xs text-slate-600 font-medium mt-[2px]">
+              Scheda dettagliata della ricetta e composizione nutrizionale
+            </p>
           </div>
 
           <button
-            onClick={() => setSelectedSlot(null)}
-            className="p-[6px] px-[12px] rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-xs transition-colors shrink-0"
+            type="button"
+            onClick={() => {
+              const r = inspectRecipe;
+              setInspectRecipe(null);
+              handleOpenDosimetro(r);
+            }}
+            className={`p-[5px] px-[12px] rounded-lg text-white font-extrabold text-xs shadow-md transition-all flex items-center justify-center gap-[5px] shrink-0 active:scale-95 ${
+              selectedSlot?.mealType === 'lunch'
+                ? 'bg-[#f37021] hover:bg-[#d95d13]'
+                : 'bg-[#191970] hover:bg-[#121250]'
+            }`}
           >
-            Annulla
+            <Plus className="w-4 h-4 stroke-[3]" />
+            <span>Assegna con Dosimetro</span>
           </button>
         </div>
 
+        {/* Prep Time & Calories Info Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-[5px]">
+          <div className="p-[5px] bg-slate-50 border border-slate-200 rounded-lg space-y-[5px]">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Tempo di Preparazione</span>
+            <p className="text-sm font-black text-[#191970] flex items-center gap-[5px]">
+              <Clock className="w-4 h-4 text-[#f37021]" />
+              {inspectRecipe.prepTimeMinutes || 20} minuti
+            </p>
+          </div>
+          <div className="p-[5px] bg-amber-50/70 border border-amber-200 rounded-lg space-y-[5px]">
+            <span className="text-[10px] font-bold text-amber-800 uppercase tracking-wider block">Valori Nutrizionali Indicativi</span>
+            <p className="text-sm font-black text-[#d95d13] flex items-center gap-[5px]">
+              <Flame className="w-4 h-4 text-[#f37021]" />
+              {getRecipeNut(inspectRecipe).calories} kcal / porzione
+            </p>
+          </div>
+        </div>
+
+        {/* Ingredients List */}
+        <div className="space-y-[5px]">
+          <h4 className="font-extrabold text-xs text-[#191970] flex items-center gap-[5px]">
+            <UtensilsCrossed className="w-4 h-4 text-[#f37021]" />
+            Ingredienti Necessari:
+          </h4>
+          <ul className="bg-slate-50 border border-slate-200 rounded-lg p-[5px] space-y-[5px] text-xs text-slate-700 divide-y divide-slate-200/60">
+            {inspectRecipe.ingredients.map((ing, idx) => (
+              <li key={idx} className="flex items-center justify-between pt-[4px] first:pt-0">
+                <span className="font-semibold text-slate-800">{ing.name}</span>
+                <span className="font-black text-[#191970]">{ing.quantity} {ing.unit}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {/* Preparation Steps */}
+        {inspectRecipe.instructions && (
+          <div className="space-y-[5px]">
+            <h4 className="font-extrabold text-xs text-[#191970] flex items-center gap-[5px]">
+              <ChefHat className="w-4 h-4 text-[#f37021]" />
+              Istruzioni e Preparazione:
+            </h4>
+            <p className="text-xs text-slate-700 bg-slate-50 p-[5px] rounded-lg border border-slate-200 whitespace-pre-line leading-relaxed">
+              {inspectRecipe.instructions}
+            </p>
+          </div>
+        )}
+
+        {/* Bottom Actions Footer */}
+        <div className="p-[5px] bg-slate-50 border border-slate-200 flex items-center justify-between rounded-lg">
+          <button
+            type="button"
+            onClick={() => setInspectRecipe(null)}
+            className="p-[5px] px-[12px] rounded-md bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-xs"
+          >
+            Chiudi Scheda
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              const r = inspectRecipe;
+              setInspectRecipe(null);
+              handleOpenDosimetro(r);
+            }}
+            className="p-[5px] px-[14px] rounded-md bg-[#f37021] hover:bg-[#d95d13] text-white font-extrabold text-xs flex items-center gap-[5px] shadow-2xs"
+          >
+            <Plus className="w-4 h-4 stroke-[3]" />
+            <span>Assegna con Dosimetro</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // PAGE VIEW: DOSIMETRO & GRAMMAGE ASSIGNMENT PAGE
+  if (dosimetroRecipe) {
+    return (
+      <div className="bg-white rounded-lg p-[5px] border border-slate-200 shadow-md space-y-[5px] animate-fade-in min-h-[75vh]">
+        {/* Top Navigation Bar */}
+        <div className="py-[2px] flex items-center justify-between gap-[5px]">
+          <button
+            type="button"
+            onClick={() => setDosimetroRecipe(null)}
+            className="p-[5px] px-[10px] rounded-md bg-white hover:bg-slate-50 text-[#191970] font-extrabold text-xs flex items-center gap-[5px] border border-slate-300 shadow-2xs transition-all active:scale-95"
+          >
+            <ChevronLeft className="w-4 h-4 text-[#191970]" />
+            <span>Torna Indietro</span>
+          </button>
+        </div>
+
+        {/* Title & Meal Target Banner */}
+        <div className="bg-white p-[8px] px-[12px] rounded-lg border-2 border-[#191970] flex items-center justify-between gap-[8px]">
+          <h2 className="font-extrabold text-[#191970] text-lg sm:text-xl">
+            {dosimetroRecipe.name}
+          </h2>
+          {selectedSlot ? (
+            <div className="flex flex-col items-end text-right shrink-0">
+              <span className="text-xs font-black text-[#f37021] uppercase tracking-wide">
+                {selectedSlot.day}
+              </span>
+              <span className="text-xs font-bold text-[#191970] flex items-center gap-[4px] mt-[1px]">
+                {selectedSlot.mealType === 'lunch' ? (
+                  <>
+                    <span>Pranzo</span>
+                    <Sun className="w-3.5 h-3.5 text-amber-500 fill-amber-400" />
+                  </>
+                ) : (
+                  <>
+                    <span>Cena</span>
+                    <Moon className="w-3.5 h-3.5 text-indigo-500 fill-indigo-400" />
+                  </>
+                )}
+              </span>
+            </div>
+          ) : (
+            <span className="text-xs text-slate-600 font-medium text-right">
+              Scegli giorno e pasto
+            </span>
+          )}
+        </div>
+
+        {/* Target Day & Meal Selection if no slot pre-selected */}
+        {!selectedSlot && (
+          <div className="p-[5px] bg-white border border-slate-200 rounded-lg grid grid-cols-1 sm:grid-cols-2 gap-[5px]">
+            <div>
+              <label className="text-[10px] font-extrabold text-[#191970] uppercase tracking-wider block mb-1">Giorno della Settimana</label>
+              <select
+                value={dosimetroDay}
+                onChange={(e) => setDosimetroDay(e.target.value as DayOfWeek)}
+                className="w-full p-[5px] bg-white border border-slate-300 rounded-md text-xs font-bold text-slate-800 focus:ring-2 focus:ring-[#f37021]"
+              >
+                {DAYS_OF_WEEK.map((d) => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-[10px] font-extrabold text-[#191970] uppercase tracking-wider block mb-1">Pasto</label>
+              <select
+                value={dosimetroMeal}
+                onChange={(e) => setDosimetroMeal(e.target.value as MealType)}
+                className="w-full p-[5px] bg-white border border-slate-300 rounded-md text-xs font-bold text-slate-800 focus:ring-2 focus:ring-[#f37021]"
+              >
+                <option value="lunch">Pranzo ☀️</option>
+                <option value="dinner">Cena 🌙</option>
+              </select>
+            </div>
+          </div>
+        )}
+
+        {/* Members Dosage List */}
+        <div className="space-y-[5px]">
+          {(familyMembers.length > 0
+            ? familyMembers.map((m) => m.name)
+            : (familyMembersList.length > 0 ? familyMembersList : ['Madre', 'Padre', 'Membro 1', 'Membro 2'])
+          ).map((memberName) => {
+            const currentGrams = dosages[memberName] ?? 100;
+            return (
+              <div key={memberName} className="p-[5px] bg-white border border-slate-200 rounded-lg space-y-[5px]">
+                <div className="flex items-center justify-between">
+                  <span className="font-extrabold text-xs text-[#191970] flex items-center gap-[5px]">
+                    <Users className="w-4 h-4 text-[#f37021]" />
+                    {memberName}
+                  </span>
+                  <span className="text-xs font-black text-[#f37021] bg-white px-[8px] py-[2px] rounded border border-slate-200 shadow-2xs">
+                    {currentGrams} g
+                  </span>
+                </div>
+
+                {/* Slider & +/- controls */}
+                <div className="flex items-center gap-[5px]">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const newG = Math.max(0, currentGrams - 10);
+                      setDosages((prev) => ({ ...prev, [memberName]: newG }));
+                    }}
+                    className="w-7 h-7 rounded bg-slate-200 hover:bg-slate-300 font-black text-slate-800 text-xs flex items-center justify-center shrink-0 active:scale-95 transition-all"
+                  >
+                    -
+                  </button>
+                  <input
+                    type="range"
+                    min="0"
+                    max="400"
+                    step="5"
+                    value={currentGrams}
+                    onChange={(e) => {
+                      const newG = parseInt(e.target.value) || 0;
+                      setDosages((prev) => ({ ...prev, [memberName]: newG }));
+                    }}
+                    className="w-full accent-[#f37021] cursor-pointer"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const newG = currentGrams + 10;
+                      setDosages((prev) => ({ ...prev, [memberName]: newG }));
+                    }}
+                    className="w-7 h-7 rounded bg-slate-200 hover:bg-slate-300 font-black text-slate-800 text-xs flex items-center justify-center shrink-0 active:scale-95 transition-all"
+                  >
+                    +
+                  </button>
+                </div>
+
+                {/* Quick Presets */}
+                <div className="flex items-center gap-[5px] flex-wrap">
+                  <span className="text-[10px] text-slate-400 font-semibold">Preset rapidi:</span>
+                  {[60, 80, 100, 120, 150].map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setDosages((prev) => ({ ...prev, [memberName]: preset }))}
+                      className={`text-[11px] font-bold px-[6px] py-[2px] rounded transition-colors ${
+                        currentGrams === preset
+                          ? 'bg-[#191970] text-white'
+                          : 'bg-white border border-slate-300 text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      {preset}g
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Note / Preference Input */}
+        <div className="space-y-[5px]">
+          <label className="text-xs font-bold text-[#191970] block">
+            Annotazione o nota speciale per il pasto:
+          </label>
+          <input
+            type="text"
+            placeholder="es. senza glutine, porzione abbondante, poco sale..."
+            value={dosimetroNote}
+            onChange={(e) => setDosimetroNote(e.target.value)}
+            className="w-full p-[5px] bg-white border border-slate-300 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#f37021]"
+          />
+        </div>
+
+        {/* Total Grams Summary */}
+        <div className="p-[5px] bg-white rounded-lg flex items-center justify-between font-extrabold text-xs text-[#191970] border border-slate-200">
+          <span>Totale Grammi Famiglia:</span>
+          <span className="text-[#f37021] text-base font-black">
+            {Object.values(dosages).reduce((a: number, b: number) => a + b, 0)} g
+          </span>
+        </div>
+
+        {/* Actions */}
+        <div className="flex items-center justify-end gap-[5px] pt-[5px] border-t border-slate-100">
+          <button
+            type="button"
+            onClick={() => setDosimetroRecipe(null)}
+            className="p-[5px] px-[14px] rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-xs"
+          >
+            Annulla
+          </button>
+          <button
+            type="button"
+            onClick={async () => {
+              const targetDay = selectedSlot ? selectedSlot.day : dosimetroDay;
+              const targetMeal = selectedSlot ? selectedSlot.mealType : dosimetroMeal;
+              const targetWeek = selectedSlot ? (selectedSlot.weekId || activeWeekId) : dosimetroWeek;
+              const recipeToAssign = dosimetroRecipe;
+
+              // Immediately reset state to return to main view
+              setDosimetroRecipe(null);
+              setSelectedSlot(null);
+              setInspectRecipe(null);
+              setDosimetroNote('');
+
+              if (recipeToAssign) {
+                if (selectedSlot?.slotId) {
+                  await updateWeeklyMenuItemDetails(selectedSlot.slotId, dosimetroNote, dosages);
+                } else {
+                  await addWeeklyMenuItem(
+                    targetDay,
+                    targetMeal,
+                    recipeToAssign.id,
+                    recipeToAssign.name,
+                    targetWeek,
+                    dosimetroNote,
+                    dosages
+                  );
+                }
+              }
+            }}
+            className="p-[5px] px-[16px] rounded-lg bg-[#f37021] hover:bg-[#d95d13] text-white font-extrabold text-xs shadow-md transition-colors"
+          >
+            Conferma e Assegna
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // PAGE VIEW: DEDICATED RECIPE SELECTION FOR CALENDAR SLOT
+  if (selectedSlot) {
+    return (
+      <div className="bg-white rounded-lg p-[5px] border border-slate-200 shadow-md space-y-[5px] animate-fade-in min-h-[80vh]">
+        {/* Header */}
+        <div className="p-[5px] bg-[#191970] text-white flex items-center justify-between gap-[5px] rounded-lg shadow-sm">
+          {/* Square Back Button with arrow, no background, no text */}
+          <button
+            onClick={() => setSelectedSlot(null)}
+            className="p-[5px] rounded-md bg-transparent hover:bg-white/10 text-white transition-colors shrink-0 flex items-center justify-center border border-transparent"
+            title="Torna al Calendario"
+          >
+            <ChevronLeft className="w-5 h-5 text-white stroke-[2.5]" />
+          </button>
+
+          {/* Right Aligned: Icon-only Meal Badge + Annulla Button with thick border and no background */}
+          <div className="flex items-center gap-[6px] shrink-0">
+            <div
+              className="p-[5px] px-[8px] rounded-md border-2 border-white/80 bg-transparent text-white flex items-center justify-center shadow-2xs"
+              title={selectedSlot.mealType === 'lunch' ? 'Pranzo' : 'Cena'}
+            >
+              {selectedSlot.mealType === 'lunch' ? (
+                <Sun className="w-5 h-5 text-amber-300 stroke-[2.5]" />
+              ) : (
+                <Moon className="w-5 h-5 text-indigo-300 stroke-[2.5]" />
+              )}
+            </div>
+
+            <button
+              onClick={() => setSelectedSlot(null)}
+              className="p-[5px] px-[10px] rounded-md bg-transparent hover:bg-white/10 text-white font-extrabold text-xs border-2 border-white transition-colors shrink-0"
+            >
+              Annulla
+            </button>
+          </div>
+        </div>
+
         {/* Filter Controls */}
-        <div className="p-[10px] border border-slate-200 space-y-[8px] bg-slate-50 rounded-lg">
+        <div className="p-[5px] border border-slate-200 space-y-[5px] bg-slate-50 rounded-lg">
           <div className="relative">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+            <Search className="w-4 h-4 text-slate-400 absolute left-2.5 top-2.5" />
             <input
               type="text"
               placeholder="Cerca per nome o ingrediente..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 bg-white text-slate-900 placeholder-slate-400 border border-slate-300 rounded-md text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#f37021]"
+              className="w-full pl-8 pr-3 py-1 bg-white text-slate-900 placeholder-slate-400 border border-slate-300 rounded-md text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#f37021]"
             />
           </div>
 
           {/* Consigli Prodotti di Stagione */}
-          <div className="p-[8px] bg-emerald-900 text-white rounded-md border border-emerald-700 space-y-[6px]">
+          <div className="p-[5px] bg-emerald-900 text-white rounded-md border border-emerald-700 space-y-[5px]">
             <div className="flex items-center justify-between px-[2px]">
               <span className="text-xs font-extrabold text-emerald-200 flex items-center gap-[4px]">
                 <Leaf className="w-3.5 h-3.5 text-emerald-300" />
@@ -579,39 +988,29 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
           </div>
 
           {/* Portate */}
-          <div className="flex items-center gap-[5px] overflow-x-auto pb-1 scrollbar-none pt-[2px]">
-            <span className="text-xs font-extrabold text-[#191970] shrink-0">Portata:</span>
+          <div className="grid grid-cols-6 gap-[3px] sm:gap-[5px] w-full pt-[1px]">
             {(['Tutti', 'Antipasti', 'Primi', 'Secondi', 'Contorni', 'Dolci'] as const).map((c) => (
               <button
                 key={c}
                 onClick={() => setSelectedCourseFilter(c)}
-                className={`p-[5px] px-[10px] rounded-md text-xs font-extrabold whitespace-nowrap transition-colors flex items-center gap-[4px] ${
+                className={`py-[5px] px-[2px] sm:px-[6px] rounded-md text-[10px] sm:text-xs font-extrabold text-center truncate transition-colors flex items-center justify-center ${
                   selectedCourseFilter === c
                     ? 'bg-[#191970] text-white shadow-xs'
                     : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-100'
                 }`}
               >
-                <span>
-                  {c === 'Tutti' && '🍽️'}
-                  {c === 'Antipasti' && '🥗'}
-                  {c === 'Primi' && '🍝'}
-                  {c === 'Secondi' && '🥩'}
-                  {c === 'Contorni' && '🥬'}
-                  {c === 'Dolci' && '🍰'}
-                </span>
-                <span>{c}</span>
+                {c}
               </button>
             ))}
           </div>
 
           {/* Tradizione */}
-          <div className="flex items-center gap-[5px] overflow-x-auto pb-1 scrollbar-none pt-[2px]">
-            <span className="text-xs font-extrabold text-slate-500 shrink-0">Tradizione:</span>
+          <div className="grid grid-cols-5 gap-[3px] sm:gap-[5px] w-full pt-[1px]">
             {categories.map((cat) => (
               <button
                 key={cat}
                 onClick={() => setSelectedCategory(cat)}
-                className={`p-[4px] px-[9px] rounded-md text-xs font-bold whitespace-nowrap transition-colors ${
+                className={`py-[4px] px-[2px] sm:px-[6px] rounded-md text-[10px] sm:text-xs font-bold text-center truncate transition-colors flex items-center justify-center ${
                   selectedCategory === cat
                     ? 'bg-[#f37021] text-white shadow-xs'
                     : 'bg-white border border-slate-300 text-slate-600 hover:bg-slate-100'
@@ -624,7 +1023,7 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
         </div>
 
         {/* Recipes Grid */}
-        <div className="space-y-[8px]">
+        <div className="space-y-[5px]">
           <div className="flex items-center justify-between p-[2px]">
             <h4 className="font-extrabold text-[#191970] text-sm">Ricette Disponibili ({filteredRecipes.length})</h4>
             <button
@@ -637,66 +1036,90 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
           </div>
 
           {filteredRecipes.length === 0 ? (
-            <div className="text-center py-12 text-slate-400 bg-slate-50 rounded-lg border border-slate-200">
+            <div className="text-center py-8 text-slate-400 bg-slate-50 rounded-lg border border-slate-200 p-[5px]">
               <p className="text-xs font-semibold text-slate-600">Nessuna ricetta trovata con questi filtri.</p>
               <button
                 onClick={() => onOpenRecipeModal()}
-                className="mt-3 p-[8px] px-[14px] rounded-md bg-[#f37021] text-white font-bold text-xs inline-flex items-center gap-[4px]"
+                className="mt-2 p-[5px] px-[10px] rounded-md bg-[#f37021] text-white font-bold text-xs inline-flex items-center gap-[4px]"
               >
                 <Plus className="w-4 h-4" /> Crea Nuova Ricetta
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-[10px]">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-[5px]">
               {filteredRecipes.map((recipe) => {
                 const nut = getRecipeNut(recipe);
                 const displayCourse = recipe.course || inferCourseFromRecipe(recipe.name, recipe.category);
+                const isLunch = selectedSlot.mealType === 'lunch';
+
                 return (
                   <div
                     key={recipe.id}
-                    onClick={() => handleSelectRecipe(recipe)}
-                    className="p-[12px] bg-white hover:bg-[#f37021]/10 border border-slate-200 hover:border-[#f37021] rounded-lg cursor-pointer transition-all flex flex-col justify-between gap-[8px] group shadow-2xs hover:shadow-md"
+                    onClick={() => setInspectRecipe(recipe)}
+                    className="p-[6px] bg-white hover:bg-slate-50 border border-slate-200 hover:border-[#191970]/30 rounded-lg cursor-pointer transition-all flex flex-col justify-between gap-[5px] group shadow-2xs hover:shadow-md relative"
                   >
-                    <div>
-                      <div className="flex items-center gap-[4px] mb-[6px] flex-wrap">
-                        <span className="text-[10px] font-black px-[6px] py-[2px] rounded-full bg-[#191970] text-white">
-                          {displayCourse === 'Antipasti' && '🥗 '}
-                          {displayCourse === 'Primi' && '🍝 '}
-                          {displayCourse === 'Secondi' && '🥩 '}
-                          {displayCourse === 'Contorni' && '🥬 '}
-                          {displayCourse === 'Dolci' && '🍰 '}
-                          {displayCourse}
-                        </span>
-                        <span className="text-[10px] font-bold px-[6px] py-[2px] rounded bg-[#f37021]/10 text-[#f37021]">
-                          {recipe.category}
-                        </span>
-                        {recipe.prepTimeMinutes && (
-                          <span className="text-[10px] text-slate-400 flex items-center gap-1">
-                            <Clock className="w-3 h-3 text-slate-400" />
-                            {recipe.prepTimeMinutes} min
+                    <div className="space-y-[4px]">
+                      <div className="flex items-center justify-between gap-[4px]">
+                        <div className="flex items-center gap-[4px] flex-wrap min-w-0 pr-2">
+                          <span className="text-[10px] font-black px-[6px] py-[2px] rounded-full bg-[#191970] text-white shrink-0">
+                            {displayCourse === 'Antipasti' && '🥗 '}
+                            {displayCourse === 'Primi' && '🍝 '}
+                            {displayCourse === 'Secondi' && '🥩 '}
+                            {displayCourse === 'Contorni' && '🥬 '}
+                            {displayCourse === 'Dolci' && '🍰 '}
+                            {displayCourse}
                           </span>
-                        )}
+                          <span className="text-[10px] font-bold px-[6px] py-[2px] rounded bg-[#f37021]/10 text-[#f37021] shrink-0">
+                            {recipe.category}
+                          </span>
+                        </div>
+
+                        {/* Plus button for Dosimetro color-coded by meal type */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenDosimetro(recipe);
+                          }}
+                          className={`p-[6px] rounded-lg text-white font-extrabold text-xs shadow-xs hover:scale-105 active:scale-95 transition-all flex items-center justify-center shrink-0 ${
+                            isLunch
+                              ? 'bg-[#f37021] hover:bg-[#d95d13]'
+                              : 'bg-[#191970] hover:bg-[#121250]'
+                          }`}
+                          title={`Assegna con Dosimetro (${isLunch ? 'Pranzo' : 'Cena'})`}
+                        >
+                          <Plus className="w-5 h-5 stroke-[3]" />
+                        </button>
                       </div>
+
                       <h4 className="font-extrabold text-[#191970] text-base group-hover:text-[#f37021] leading-tight">
                         {recipe.name}
                       </h4>
 
-                      {/* Nutrition info */}
-                      <div className="flex items-center gap-[4px] text-[10px] font-bold my-[5px]">
+                      {/* Prep time & Nutrition info */}
+                      <div className="flex items-center gap-[4px] text-[10px] font-bold flex-wrap">
+                        {recipe.prepTimeMinutes && (
+                          <span className="text-slate-500 flex items-center gap-[2px]">
+                            <Clock className="w-3 h-3 text-slate-400" />
+                            {recipe.prepTimeMinutes}m
+                          </span>
+                        )}
                         <span className="bg-[#f37021]/15 text-[#d95d13] px-1.5 py-[1px] rounded">🔥 {nut.calories} kcal</span>
                         <span className="bg-blue-50 text-blue-800 px-1 py-[1px] rounded">P: {nut.protein}g</span>
                         <span className="bg-amber-50 text-amber-800 px-1 py-[1px] rounded">G: {nut.fat}g</span>
                         <span className="bg-emerald-50 text-emerald-800 px-1 py-[1px] rounded">C: {nut.carbs}g</span>
                       </div>
 
-                      <p className="text-xs text-slate-500 line-clamp-2">
+                      <p className="text-xs text-slate-500 line-clamp-2 pt-1 border-t border-slate-100">
+                        <span className="font-bold text-slate-600">Ingredienti:</span>{' '}
                         {recipe.ingredients.map((i) => i.name).join(', ')}
                       </p>
                     </div>
 
-                    <button className="w-full p-[8px] rounded-md bg-[#191970] group-hover:bg-[#f37021] text-white font-bold text-xs transition-colors flex items-center justify-center gap-[4px] shadow-2xs">
-                      <span>Assegna a {selectedSlot.day} ({selectedSlot.mealType === 'lunch' ? 'Pranzo' : 'Cena'})</span>
-                    </button>
+                    <div className="pt-1 flex items-center justify-between text-[10px] text-slate-400 font-medium">
+                      <span>Clicca per valutare ingredienti e dettagli</span>
+                      <Eye className="w-3.5 h-3.5 text-slate-400 group-hover:text-[#f37021]" />
+                    </div>
                   </div>
                 );
               })}
@@ -705,7 +1128,7 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="p-[10px] bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between">
+        <div className="p-[5px] bg-slate-50 border border-slate-200 flex items-center justify-between rounded-lg">
           <button
             onClick={() => onOpenRecipeModal()}
             className="text-xs font-bold text-[#f37021] hover:underline flex items-center gap-[5px]"
@@ -715,9 +1138,10 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
           </button>
           <button
             onClick={() => setSelectedSlot(null)}
-            className="p-[6px] px-[12px] rounded-md bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-xs transition-colors"
+            className="p-[5px] rounded-md bg-transparent hover:bg-slate-200 text-slate-700 transition-colors flex items-center justify-center"
+            title="Torna al Calendario"
           >
-            Torna al Calendario
+            <ChevronLeft className="w-5 h-5" />
           </button>
         </div>
       </div>
@@ -726,23 +1150,16 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
 
   return (
     <div className="space-y-[10px]">
-      {/* Header Banner & Genera Spesa Action */}
-      <div className="bg-[#191970] rounded-lg p-[10px] px-[12px] text-white shadow-md">
-        <div className="flex items-center justify-between gap-[10px]">
-          {/* Title */}
-          <div className="flex items-center gap-[8px]">
-            <Calendar className="w-4 h-4 text-[#f37021]" />
-            <h2 className="font-extrabold text-xs sm:text-sm text-white tracking-wide">
-              {activeSubTab === 'recipeBook'
-                ? 'Ricettario di Famiglia'
-                : activeSubTab === 'nutrition'
-                ? 'Valori Nutrizionali & Statistiche'
-                : 'Menu Settimanale'}
-            </h2>
-          </div>
-
-          {/* Plus Button for Recipe Book */}
-          {activeSubTab === 'recipeBook' && (
+      {/* Header Banner for Recipe Book */}
+      {activeSubTab === 'recipeBook' && (
+        <div className="bg-[#191970] rounded-lg p-[10px] px-[12px] text-white shadow-md">
+          <div className="flex items-center justify-between gap-[10px]">
+            <div className="flex items-center gap-[8px]">
+              <Calendar className="w-4 h-4 text-[#f37021]" />
+              <h2 className="font-extrabold text-xs sm:text-sm text-white tracking-wide">
+                Ricettario di Famiglia
+              </h2>
+            </div>
             <button
               onClick={() => onOpenRecipeModal()}
               title="Aggiungi Nuova Ricetta"
@@ -750,27 +1167,9 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
             >
               <Plus className="w-4 h-4 text-white stroke-[3]" />
             </button>
-          )}
-
-          {/* Compact Genera Spesa Button on Top Right (when in calendar mode) */}
-          {(activeSubTab === 'calendar' || activeSubTab === 'fullCalendar') && (
-            <button
-              id="generate-shopping-list-btn"
-              onClick={handleGenerateSpesa}
-              disabled={isGenerating}
-              className="py-1.5 px-3 rounded-lg bg-[#f37021] hover:bg-[#d95d13] text-white font-bold text-xs shadow-md active:scale-95 transition-all flex items-center gap-1.5 disabled:opacity-60 ml-auto"
-              title={`Genera spesa per ${getFormattedWeekRange(weekOffset)}`}
-            >
-              <ShoppingCart className="w-3.5 h-3.5 text-white shrink-0" />
-              <span>
-                {isGenerating
-                  ? 'Calcolo...'
-                  : `Genera Spesa ${weekOffset === 0 ? '' : `(+${weekOffset})`}`}
-              </span>
-            </button>
-          )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Generation Success Notification Banner */}
       {generationResult !== null && (
@@ -800,77 +1199,20 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
 
       {/* VIEW 1: WEEKLY CALENDAR WITH WEEK NAVIGATOR */}
       {activeSubTab === 'calendar' && (
-        <div className="space-y-[10px]">
-          {/* Week Navigation Header Controls */}
-          <div className="bg-white rounded-lg p-[5px] border border-slate-200 shadow-2xs flex flex-col md:flex-row items-center justify-between gap-[5px]">
-            <div className="flex items-center gap-[5px] w-full md:w-auto justify-between md:justify-start">
-              <button
-                onClick={() => setWeekOffset(weekOffset - 1)}
-                className="p-[5px] px-[8px] rounded-md border border-slate-300 bg-slate-50 hover:bg-slate-100 text-[#191970] font-extrabold text-[11px] flex items-center gap-[3px] transition-all shrink-0"
-              >
-                <ChevronLeft className="w-3.5 h-3.5" />
-                <span>Sett. Prec.</span>
-              </button>
-
-              <div className="text-center px-[4px]">
-                <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#f37021] block leading-none">
-                  {weekOffset === 0
-                    ? 'Settimana Corrente'
-                    : weekOffset > 0
-                    ? `Tra ${weekOffset} Settiman${weekOffset === 1 ? 'a' : 'e'}`
-                    : `${Math.abs(weekOffset)} Settiman${Math.abs(weekOffset) === 1 ? 'a' : 'e'} Fa`}
-                </span>
-                <h3 className="text-xs sm:text-sm font-black text-[#191970] leading-tight mt-[1px]">
-                  {getFormattedWeekRange(weekOffset)}
-                </h3>
-              </div>
-
-              <button
-                onClick={() => setWeekOffset(weekOffset + 1)}
-                className="p-[5px] px-[8px] rounded-md border border-slate-300 bg-slate-50 hover:bg-slate-100 text-[#191970] font-extrabold text-[11px] flex items-center gap-[3px] transition-all shrink-0"
-              >
-                <span>Sett. Succ.</span>
-                <ChevronRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-
-            {/* Quick Week Selectors (Up to +2 weeks, fitted in 3 columns) */}
-            <div className="grid grid-cols-3 gap-[5px] w-full md:w-auto">
-              <button
-                onClick={() => setWeekOffset(0)}
-                className={`p-[5px] px-[4px] rounded-md text-[10px] sm:text-[11px] font-extrabold text-center transition-all truncate ${
-                  weekOffset === 0
-                    ? 'bg-[#191970] text-white border border-[#191970] shadow-2xs'
-                    : 'bg-slate-50 text-slate-700 border border-slate-300 hover:bg-slate-100'
-                }`}
-              >
-                Questa Settimana
-              </button>
-              <button
-                onClick={() => setWeekOffset(1)}
-                className={`p-[5px] px-[4px] rounded-md text-[10px] sm:text-[11px] font-extrabold text-center transition-all truncate ${
-                  weekOffset === 1
-                    ? 'bg-[#f37021] text-white border border-[#f37021] shadow-2xs'
-                    : 'bg-slate-50 text-slate-700 border border-slate-300 hover:bg-slate-100'
-                }`}
-              >
-                Prossima (+1)
-              </button>
-              <button
-                onClick={() => setWeekOffset(2)}
-                className={`p-[5px] px-[4px] rounded-md text-[10px] sm:text-[11px] font-extrabold text-center transition-all truncate ${
-                  weekOffset === 2
-                    ? 'bg-[#f37021] text-white border border-[#f37021] shadow-2xs'
-                    : 'bg-slate-50 text-slate-700 border border-slate-300 hover:bg-slate-100'
-                }`}
-              >
-                Tra 2 Sett. (+2)
-              </button>
-            </div>
-          </div>
-
+        summaryModalData ? (
+          <DailySummaryModal
+            onClose={() => setSummaryModalData(null)}
+            dayName={summaryModalData.dayName}
+            dateStr={summaryModalData.dateStr}
+            lunchSlots={summaryModalData.lunchSlots}
+            dinnerSlots={summaryModalData.dinnerSlots}
+            recipeMap={recipeMap}
+            familyMembers={familyMembers}
+          />
+        ) : (
+        <div className="space-y-[5px] pb-[95px] relative">
           {/* 7 Days Grid for Active Week */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-[10px]">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-[5px]">
             {DAYS_OF_WEEK.map((day, dayIdx) => {
               const dateInfo = getDateForDayIndex(weekOffset, dayIdx);
               
@@ -905,78 +1247,18 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
               return (
                 <div
                   key={day}
-                  className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden flex flex-col justify-between p-[5px]"
+                  className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden flex flex-col justify-between p-[5px] gap-[5px]"
                 >
-                  {/* Day Header with Date (thick border, no solid blue bg) */}
-                  <div className="border-2 border-[#191970] bg-white p-[5px] px-[8px] rounded-md flex items-center justify-between mb-[5px]">
-                    <span className="font-extrabold text-xs tracking-wide text-[#191970]">{day}</span>
-                    <span className="text-[10px] text-slate-500 font-bold">{dateInfo.fullDateStr}</span>
-                  </div>
+                  {/* Day Header Row: Title Card + Square Action Buttons */}
+                  <div className="flex items-center justify-between gap-[5px]">
+                    <div className="border-2 border-[#191970] bg-white p-[5px] px-[8px] rounded-md flex-1 min-w-0 flex items-center">
+                      <span className="font-extrabold text-xs tracking-wide text-[#191970] flex items-center gap-[5px] truncate">
+                        {day} <span className="text-[10px] text-slate-500 font-bold">{dateInfo.fullDateStr}</span>
+                      </span>
+                    </div>
 
-                  <div className="space-y-[6px]">
-                    {/* PRANZO SLOT */}
-                    <div className="space-y-[4px]">
-                      <div className="flex items-center justify-between p-[2px]">
-                        <span className="text-[11px] font-bold uppercase tracking-wider text-[#f37021] flex items-center gap-[5px]">
-                          <Sun className="w-3.5 h-3.5 text-[#f37021]" />
-                          <span>Pranzo {lunchSlots.length > 0 && `(${lunchSlots.length})`}</span>
-                        </span>
-                      </div>
-
-                      <div className={lunchSlots.length > 0 ? "grid grid-cols-2 gap-[5px]" : "space-y-[4px]"}>
-                        {lunchSlots.map((lunchSlot) => {
-                          const lunchRecipe = recipeMap.get(lunchSlot.recipeId);
-                          const lunchNut = getRecipeNut(lunchRecipe);
-                          return (
-                            <div
-                              key={lunchSlot.id}
-                              className="group relative bg-[#f37021]/10 border border-[#f37021]/30 rounded-md p-[5px] hover:bg-[#f37021]/20 transition-colors flex flex-col justify-between min-w-0"
-                            >
-                              <div className="flex items-start justify-between gap-[3px]">
-                                <div className="min-w-0 flex-1">
-                                  <h4 className="font-bold text-[#191970] text-[11px] sm:text-xs truncate leading-tight">
-                                    {lunchSlot.recipeName}
-                                  </h4>
-                                  <button
-                                    onClick={() => {
-                                      if (lunchRecipe) onOpenRecipeModal(lunchRecipe);
-                                    }}
-                                    className="text-[9px] font-semibold text-[#f37021] hover:underline inline-block"
-                                  >
-                                    Vedi ingredienti
-                                  </button>
-                                </div>
-                                <button
-                                  onClick={() => handleRemoveMenuItem(lunchSlot.id)}
-                                  className="p-[2px] rounded text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors shrink-0"
-                                  title="Rimuovi pietanza"
-                                >
-                                  <Trash2 className="w-3 h-3" />
-                                </button>
-                              </div>
-
-                              {/* Nutrition pills for lunch */}
-                              {lunchNut && (
-                                <div className="mt-[4px] pt-[3px] border-t border-[#f37021]/20 flex items-center gap-[2px] flex-wrap text-[9px] font-bold">
-                                  <span className="p-[1px] px-[3px] rounded bg-[#f37021]/20 text-[#d95d13] whitespace-nowrap">
-                                    🔥 {lunchNut.calories} kcal
-                                  </span>
-                                  <span className="p-[1px] px-[3px] rounded bg-white/80 text-blue-800 whitespace-nowrap">
-                                    P: {lunchNut.protein}g
-                                  </span>
-                                  <span className="p-[1px] px-[3px] rounded bg-white/80 text-amber-800 whitespace-nowrap">
-                                    G: {lunchNut.fat}g
-                                  </span>
-                                  <span className="p-[1px] px-[3px] rounded bg-white/80 text-emerald-800 whitespace-nowrap">
-                                    C: {lunchNut.carbs}g
-                                  </span>
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-
+                    {/* Two square buttons with thick borders for Pranzo & Cena outside day card */}
+                    <div className="flex items-center gap-[5px] shrink-0">
                       <button
                         onClick={() =>
                           setSelectedSlot({
@@ -986,75 +1268,11 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
                             dateStr: dateInfo.fullDateStr
                           })
                         }
-                        className="w-full p-[5px] border-2 border-dashed border-slate-200 hover:border-[#f37021] rounded-md bg-slate-50 hover:bg-[#f37021]/10 text-slate-600 hover:text-[#f37021] transition-all text-xs font-semibold flex items-center justify-center gap-[4px]"
+                        className="w-[28px] h-[28px] rounded-md border-2 border-[#f37021] bg-[#f37021]/10 hover:bg-[#f37021] hover:text-white text-[#f37021] flex items-center justify-center transition-all shadow-2xs active:scale-90"
+                        title={`Aggiungi pietanza a Pranzo (${day})`}
                       >
-                        <Plus className="w-3.5 h-3.5 text-[#f37021]" />
-                        <span>{lunchSlots.length > 0 ? '+ Aggiungi pietanza a Pranzo' : 'Scegli Pranzo'}</span>
+                        <Sun className="w-3.5 h-3.5 stroke-[2.5]" />
                       </button>
-                    </div>
-
-                    {/* CENA SLOT */}
-                    <div className="space-y-[4px]">
-                      <div className="flex items-center justify-between p-[2px]">
-                        <span className="text-[11px] font-bold uppercase tracking-wider text-[#191970] flex items-center gap-[5px]">
-                          <Moon className="w-3.5 h-3.5 text-[#191970]" />
-                          <span>Cena {dinnerSlots.length > 0 && `(${dinnerSlots.length})`}</span>
-                        </span>
-                      </div>
-
-                      <div className={dinnerSlots.length > 0 ? "grid grid-cols-2 gap-[5px]" : "space-y-[4px]"}>
-                        {dinnerSlots.map((dinnerSlot) => {
-                          const dinnerRecipe = recipeMap.get(dinnerSlot.recipeId);
-                          const dinnerNut = getRecipeNut(dinnerRecipe);
-                          return (
-                            <div
-                              key={dinnerSlot.id}
-                              className="group relative bg-[#191970]/10 border border-[#191970]/30 rounded-md p-[5px] hover:bg-[#191970]/20 transition-colors flex flex-col justify-between min-w-0"
-                            >
-                              <div className="flex items-start justify-between gap-[3px]">
-                                <div className="min-w-0 flex-1">
-                                  <h4 className="font-bold text-[#191970] text-[11px] sm:text-xs truncate leading-tight">
-                                    {dinnerSlot.recipeName}
-                                  </h4>
-                                  <button
-                                    onClick={() => {
-                                      if (dinnerRecipe) onOpenRecipeModal(dinnerRecipe);
-                                    }}
-                                    className="text-[9px] font-semibold text-[#191970] hover:underline inline-block"
-                                  >
-                                    Vedi ingredienti
-                                  </button>
-                                </div>
-                                <button
-                                  onClick={() => handleRemoveMenuItem(dinnerSlot.id)}
-                                  className="p-[2px] rounded text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors shrink-0"
-                                  title="Rimuovi pietanza"
-                                >
-                                  <Trash2 className="w-3 h-3" />
-                                </button>
-                              </div>
-
-                              {/* Nutrition pills for dinner */}
-                              {dinnerNut && (
-                                <div className="mt-[4px] pt-[3px] border-t border-[#191970]/20 flex items-center gap-[2px] flex-wrap text-[9px] font-bold">
-                                  <span className="p-[1px] px-[3px] rounded bg-[#191970]/20 text-[#191970] whitespace-nowrap">
-                                    🔥 {dinnerNut.calories} kcal
-                                  </span>
-                                  <span className="p-[1px] px-[3px] rounded bg-white/80 text-blue-800 whitespace-nowrap">
-                                    P: {dinnerNut.protein}g
-                                  </span>
-                                  <span className="p-[1px] px-[3px] rounded bg-white/80 text-amber-800 whitespace-nowrap">
-                                    G: {dinnerNut.fat}g
-                                  </span>
-                                  <span className="p-[1px] px-[3px] rounded bg-white/80 text-emerald-800 whitespace-nowrap">
-                                    C: {dinnerNut.carbs}g
-                                  </span>
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
 
                       <button
                         onClick={() =>
@@ -1065,41 +1283,338 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
                             dateStr: dateInfo.fullDateStr
                           })
                         }
-                        className="w-full p-[5px] border-2 border-dashed border-slate-200 hover:border-[#191970] rounded-md bg-slate-50 hover:bg-[#191970]/10 text-slate-600 hover:text-[#191970] transition-all text-xs font-semibold flex items-center justify-center gap-[4px]"
+                        className="w-[28px] h-[28px] rounded-md border-2 border-[#191970] bg-[#191970]/10 hover:bg-[#191970] hover:text-white text-[#191970] flex items-center justify-center transition-all shadow-2xs active:scale-90"
+                        title={`Aggiungi pietanza a Cena (${day})`}
                       >
-                        <Plus className="w-3.5 h-3.5 text-[#191970]" />
-                        <span>{dinnerSlots.length > 0 ? '+ Aggiungi pietanza a Cena' : 'Scegli Cena'}</span>
+                        <Moon className="w-3.5 h-3.5 stroke-[2.5]" />
                       </button>
                     </div>
                   </div>
 
-                  {/* Day Nutrition Summary Footer & PROGRAMMATO Badge */}
-                  <div className="mt-[6px] pt-[5px] border-t border-slate-100 bg-emerald-50/50 p-[5px] rounded-md space-y-[3px]">
-                    <div className="flex items-center justify-between text-[10px] font-extrabold text-[#191970]">
-                      <span className="flex items-center gap-1">
-                        <Flame className="w-3 h-3 text-[#f37021]" />
-                        Totale Giorno:
-                      </span>
-                      <span className="text-[#f37021]">{dayKcal} kcal/pers</span>
+                  <div className="space-y-[5px]">
+                    {/* PRANZO SLOT */}
+                    <div className="space-y-[5px]">
+                      <div className="flex items-center justify-between p-[2px]">
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-[#f37021] flex items-center gap-[5px]">
+                          <Sun className="w-3.5 h-3.5 text-[#f37021]" />
+                          <span>Pranzo {lunchSlots.length > 0 && `(${lunchSlots.length})`}</span>
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-[5px]">
+                        {lunchSlots.map((lunchSlot) => {
+                          const lunchRecipe = recipeMap.get(lunchSlot.recipeId);
+                          const lunchNut = getRecipeNut(lunchRecipe);
+                          const isDeleting = deletingSlotId === lunchSlot.id;
+
+                          return (
+                            <div
+                              key={lunchSlot.id}
+                              onMouseDown={() => handlePressStart(lunchSlot.id)}
+                              onMouseUp={handlePressEnd}
+                              onMouseLeave={handlePressEnd}
+                              onTouchStart={() => handlePressStart(lunchSlot.id)}
+                              onTouchEnd={handlePressEnd}
+                              onTouchMove={handlePressEnd}
+                              onClick={() => {
+                                if (!isDeleting && lunchRecipe) {
+                                  setDosimetroRecipe(lunchRecipe);
+                                  setSelectedSlot({
+                                    day,
+                                    mealType: 'lunch',
+                                    weekId: lunchSlot.weekId || activeWeekId,
+                                    slotId: lunchSlot.id
+                                  });
+                                  setDosages(lunchSlot.dosages || {});
+                                  setDosimetroNote(lunchSlot.notes || '');
+                                }
+                              }}
+                              className={`group relative bg-[#f37021]/10 border ${
+                                isDeleting ? 'border-red-500 ring-2 ring-red-300 bg-red-50' : 'border-[#f37021]/30 hover:bg-[#f37021]/20'
+                              } rounded-md p-[6px] transition-colors flex flex-col justify-between gap-[3px] min-w-0 select-none cursor-pointer`}
+                            >
+                              <div className="flex items-start justify-between gap-[4px] w-full">
+                                <div className="min-w-0 flex-1">
+                                  <h4
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (!isDeleting && lunchRecipe) onOpenRecipeModal(lunchRecipe);
+                                    }}
+                                    className="font-bold text-[#191970] text-[11px] sm:text-xs leading-tight hover:underline break-words"
+                                    title={cleanRecipeName(lunchSlot.recipeName)}
+                                  >
+                                    {cleanRecipeName(lunchSlot.recipeName)}
+                                  </h4>
+                                </div>
+
+                                {/* Calories on the right side */}
+                                {lunchNut && !isDeleting && (
+                                  <span className="text-[10px] font-extrabold text-[#d95d13] flex items-center gap-[2px] shrink-0 whitespace-nowrap">
+                                    <Flame className="w-3.5 h-3.5 text-[#f37021]" />
+                                    {lunchNut.calories} kcal
+                                  </span>
+                                )}
+
+                                {/* Delete button appears on long press */}
+                                {isDeleting && (
+                                  <div className="flex items-center gap-[5px] shrink-0 z-10 animate-fade-in">
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleRemoveMenuItem(lunchSlot.id);
+                                        setDeletingSlotId(null);
+                                      }}
+                                      className="p-[2px] text-red-600 hover:text-red-700 active:scale-90 transition-all shrink-0"
+                                      title="Elimina pietanza"
+                                    >
+                                      <Trash2 className="w-4 h-4 text-red-600" />
+                                    </button>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setDeletingSlotId(null);
+                                      }}
+                                      className="p-[2px] text-slate-400 hover:text-slate-700 active:scale-90 transition-all shrink-0"
+                                      title="Annulla"
+                                    >
+                                      <X className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Display Dosages if specified */}
+                              {lunchSlot.dosages && Object.keys(lunchSlot.dosages).length > 0 && !isDeleting && (
+                                <div className="text-[9px] font-extrabold text-[#d95d13] bg-white/80 px-[4px] py-[1px] rounded border border-[#f37021]/30 flex items-center gap-[3px] break-words">
+                                  <Scale className="w-3 h-3 text-[#f37021] shrink-0" />
+                                  <span className="break-words">
+                                    {Object.entries(lunchSlot.dosages).map(([m, g]) => `${m.substring(0, 3)}: ${g}g`).join(' • ')}
+                                  </span>
+                                </div>
+                              )}
+
+                              {/* Saved Annotation Badge if exists */}
+                              {lunchSlot.notes && !isDeleting && (
+                                <div className="text-[9px] font-semibold text-[#d95d13] bg-amber-50/90 px-[4px] py-[1px] rounded border border-[#f37021]/20 flex items-center gap-[3px] break-words">
+                                  <Pencil className="w-2.5 h-2.5 text-[#f37021] shrink-0" />
+                                  <span className="break-words">{lunchSlot.notes}</span>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
-                    <div className="flex items-center justify-between gap-[5px] text-[9px] text-slate-600 font-semibold">
-                      <span>P: {dayProtein}g • G: {dayFat}g • C: {dayCarbs}g</span>
-                      <span
-                        className={`text-[9px] font-black uppercase tracking-wider px-[6px] py-[2px] rounded text-white shadow-2xs shrink-0 ${
-                          lunchSlots.length > 0 || dinnerSlots.length > 0
-                            ? 'bg-emerald-600'
-                            : 'bg-amber-500'
-                        }`}
-                      >
-                        {lunchSlots.length > 0 || dinnerSlots.length > 0 ? 'PROGRAMMATO' : 'INCOMPLETO'}
-                      </span>
+
+                    {/* CENA SLOT */}
+                    <div className="space-y-[5px]">
+                      <div className="flex items-center justify-between p-[2px]">
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-[#191970] flex items-center gap-[5px]">
+                          <Moon className="w-3.5 h-3.5 text-[#191970]" />
+                          <span>Cena {dinnerSlots.length > 0 && `(${dinnerSlots.length})`}</span>
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-[5px]">
+                        {dinnerSlots.map((dinnerSlot) => {
+                          const dinnerRecipe = recipeMap.get(dinnerSlot.recipeId);
+                          const dinnerNut = getRecipeNut(dinnerRecipe);
+                          const isDeleting = deletingSlotId === dinnerSlot.id;
+
+                          return (
+                            <div
+                              key={dinnerSlot.id}
+                              onMouseDown={() => handlePressStart(dinnerSlot.id)}
+                              onMouseUp={handlePressEnd}
+                              onMouseLeave={handlePressEnd}
+                              onTouchStart={() => handlePressStart(dinnerSlot.id)}
+                              onTouchEnd={handlePressEnd}
+                              onTouchMove={handlePressEnd}
+                              onClick={() => {
+                                if (!isDeleting && dinnerRecipe) {
+                                  setDosimetroRecipe(dinnerRecipe);
+                                  setSelectedSlot({
+                                    day,
+                                    mealType: 'dinner',
+                                    weekId: dinnerSlot.weekId || activeWeekId,
+                                    slotId: dinnerSlot.id
+                                  });
+                                  setDosages(dinnerSlot.dosages || {});
+                                  setDosimetroNote(dinnerSlot.notes || '');
+                                }
+                              }}
+                              className={`group relative bg-[#191970]/10 border ${
+                                isDeleting ? 'border-red-500 ring-2 ring-red-300 bg-red-50' : 'border-[#191970]/30 hover:bg-[#191970]/20'
+                              } rounded-md p-[6px] transition-colors flex flex-col justify-between gap-[3px] min-w-0 select-none cursor-pointer`}
+                            >
+                              <div className="flex items-start justify-between gap-[4px] w-full">
+                                <div className="min-w-0 flex-1">
+                                  <h4
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (!isDeleting && dinnerRecipe) onOpenRecipeModal(dinnerRecipe);
+                                    }}
+                                    className="font-bold text-[#191970] text-[11px] sm:text-xs leading-tight hover:underline break-words"
+                                    title={cleanRecipeName(dinnerSlot.recipeName)}
+                                  >
+                                    {cleanRecipeName(dinnerSlot.recipeName)}
+                                  </h4>
+                                </div>
+
+                                {/* Calories on the right side */}
+                                {dinnerNut && !isDeleting && (
+                                  <span className="text-[10px] font-extrabold text-[#191970] flex items-center gap-[2px] shrink-0 whitespace-nowrap">
+                                    <Flame className="w-3.5 h-3.5 text-[#191970]" />
+                                    {dinnerNut.calories} kcal
+                                  </span>
+                                )}
+
+                                {/* Delete button appears on long press */}
+                                {isDeleting && (
+                                  <div className="flex items-center gap-[5px] shrink-0 z-10 animate-fade-in">
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleRemoveMenuItem(dinnerSlot.id);
+                                        setDeletingSlotId(null);
+                                      }}
+                                      className="p-[2px] text-red-600 hover:text-red-700 active:scale-90 transition-all shrink-0"
+                                      title="Elimina pietanza"
+                                    >
+                                      <Trash2 className="w-4 h-4 text-red-600" />
+                                    </button>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setDeletingSlotId(null);
+                                      }}
+                                      className="p-[2px] text-slate-400 hover:text-slate-700 active:scale-90 transition-all shrink-0"
+                                      title="Annulla"
+                                    >
+                                      <X className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Display Dosages if specified */}
+                              {dinnerSlot.dosages && Object.keys(dinnerSlot.dosages).length > 0 && !isDeleting && (
+                                <div className="text-[9px] font-extrabold text-[#191970] bg-white/80 px-[4px] py-[1px] rounded border border-[#191970]/30 flex items-center gap-[3px] break-words">
+                                  <Scale className="w-3 h-3 text-[#191970] shrink-0" />
+                                  <span className="break-words">
+                                    {Object.entries(dinnerSlot.dosages).map(([m, g]) => `${m.substring(0, 3)}: ${g}g`).join(' • ')}
+                                  </span>
+                                </div>
+                              )}
+
+                              {/* Saved Annotation Badge if exists */}
+                              {dinnerSlot.notes && !isDeleting && (
+                                <div className="text-[9px] font-semibold text-[#191970] bg-indigo-50/90 px-[4px] py-[1px] rounded border border-[#191970]/20 flex items-center gap-[3px] break-words">
+                                  <Pencil className="w-2.5 h-2.5 text-[#191970] shrink-0" />
+                                  <span className="break-words">{dinnerSlot.notes}</span>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
+                  </div>
+
+                  {/* Day Summary Trigger ("Riepilogo") */}
+                  <div className="pt-[3px] border-t border-slate-100">
+                    <button
+                      onClick={() =>
+                        setSummaryModalData({
+                          dayName: day,
+                          dateStr: dateInfo.fullDateStr,
+                          lunchSlots,
+                          dinnerSlots
+                        })
+                      }
+                      className="w-full bg-[#191970]/5 hover:bg-[#191970]/10 active:scale-[0.98] border border-[#191970]/20 rounded-md p-[6px] px-[8px] flex items-center justify-center gap-[5px] transition-all group shadow-2xs"
+                      title="Apri Riepilogo Giornaliero"
+                    >
+                      <BarChart2 className="w-4 h-4 text-[#f37021] group-hover:scale-110 transition-transform" />
+                      <span className="text-xs font-black text-[#191970]">Riepilogo Giornaliero</span>
+                    </button>
                   </div>
                 </div>
               );
             })}
           </div>
+
+          {/* Floating Overlay Week Navigation Card at Bottom */}
+          <div className="fixed bottom-[68px] left-1/2 -translate-x-1/2 w-full max-w-4xl px-[5px] z-40 pointer-events-auto">
+            <div className="bg-white/95 backdrop-blur-md rounded-xl p-[5px] border border-[#191970]/20 shadow-2xl flex flex-col md:flex-row items-center justify-between gap-[5px]">
+              <div className="flex items-center gap-[5px] w-full md:w-auto justify-between md:justify-start">
+                <button
+                  onClick={() => setWeekOffset(weekOffset - 1)}
+                  className="p-[5px] px-[8px] rounded-md bg-slate-100 hover:bg-slate-200 active:scale-95 text-[#191970] font-extrabold text-[11px] flex items-center gap-[5px] transition-all shrink-0 border border-[#191970]/15"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                  <span>Sett. Prec.</span>
+                </button>
+
+                <div className="text-center px-[4px]">
+                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#f37021] block leading-none">
+                    {weekOffset === 0
+                      ? 'Settimana Corrente'
+                      : weekOffset > 0
+                      ? `Tra ${weekOffset} Settiman${weekOffset === 1 ? 'a' : 'e'}`
+                      : `${Math.abs(weekOffset)} Settiman${Math.abs(weekOffset) === 1 ? 'a' : 'e'} Fa`}
+                  </span>
+                  <h3 className="text-xs sm:text-sm font-black text-[#191970] leading-tight mt-[1px]">
+                    {getFormattedWeekRange(weekOffset)}
+                  </h3>
+                </div>
+
+                <button
+                  onClick={() => setWeekOffset(weekOffset + 1)}
+                  className="p-[5px] px-[8px] rounded-md bg-slate-100 hover:bg-slate-200 active:scale-95 text-[#191970] font-extrabold text-[11px] flex items-center gap-[5px] transition-all shrink-0 border border-[#191970]/15"
+                >
+                  <span>Sett. Succ.</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              {/* Quick Week Selectors */}
+              <div className="grid grid-cols-3 gap-[5px] w-full md:w-auto">
+                <button
+                  onClick={() => setWeekOffset(0)}
+                  className={`p-[5px] px-[4px] rounded-md text-[10px] sm:text-[11px] font-extrabold text-center transition-all truncate ${
+                    weekOffset === 0
+                      ? 'bg-[#191970] text-white border border-[#191970] shadow-2xs'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-[#191970]/15'
+                  }`}
+                >
+                  Questa Settimana
+                </button>
+                <button
+                  onClick={() => setWeekOffset(1)}
+                  className={`p-[5px] px-[4px] rounded-md text-[10px] sm:text-[11px] font-extrabold text-center transition-all truncate ${
+                    weekOffset === 1
+                      ? 'bg-[#f37021] text-white border border-[#f37021] shadow-2xs'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-[#191970]/15'
+                  }`}
+                >
+                  Prossima (+1)
+                </button>
+                <button
+                  onClick={() => setWeekOffset(2)}
+                  className={`p-[5px] px-[4px] rounded-md text-[10px] sm:text-[11px] font-extrabold text-center transition-all truncate ${
+                    weekOffset === 2
+                      ? 'bg-[#f37021] text-white border border-[#f37021] shadow-2xs'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-[#191970]/15'
+                  }`}
+                >
+                  Tra 2 Sett. (+2)
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
+        )
       )}
 
       {/* VIEW 2: FULL GENERAL MONTH CALENDAR */}
@@ -1217,7 +1732,7 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
                             }
                             className="bg-[#f37021]/10 border border-[#f37021]/30 p-[3px] rounded font-bold text-[#d95d13] truncate cursor-pointer hover:bg-[#f37021]/20"
                           >
-                            ☀️ {lunchItem.recipeName}
+                            ☀️ {cleanRecipeName(lunchItem.recipeName)}
                           </div>
                         ) : (
                           <button
@@ -1250,7 +1765,7 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
                             }
                             className="bg-[#191970]/10 border border-[#191970]/30 p-[3px] rounded font-bold text-[#191970] truncate cursor-pointer hover:bg-[#191970]/20"
                           >
-                            🌙 {dinnerItem.recipeName}
+                            🌙 {cleanRecipeName(dinnerItem.recipeName)}
                           </div>
                         ) : (
                           <button
@@ -1430,7 +1945,7 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
                       {/* Lunch */}
                       <div className="bg-white p-[6px] rounded-md border border-slate-200">
                         <span className="text-[10px] font-bold text-[#f37021] uppercase block mb-1 flex items-center gap-1">
-                          <Sun className="w-3 h-3" /> Pranzo: {lunchSlot ? lunchSlot.recipeName : 'Non pianificato'}
+                          <Sun className="w-3 h-3" /> Pranzo: {lunchSlot ? cleanRecipeName(lunchSlot.recipeName) : 'Non pianificato'}
                         </span>
                         {lunchNut ? (
                           <div className="flex items-center gap-[5px] text-[10px] font-bold text-slate-700 flex-wrap">
@@ -1447,7 +1962,7 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
                       {/* Dinner */}
                       <div className="bg-white p-[6px] rounded-md border border-slate-200">
                         <span className="text-[10px] font-bold text-[#191970] uppercase block mb-1 flex items-center gap-1">
-                          <Moon className="w-3 h-3" /> Cena: {dinnerSlot ? dinnerSlot.recipeName : 'Non pianificato'}
+                          <Moon className="w-3 h-3" /> Cena: {dinnerSlot ? cleanRecipeName(dinnerSlot.recipeName) : 'Non pianificato'}
                         </span>
                         {dinnerNut ? (
                           <div className="flex items-center gap-[5px] text-[10px] font-bold text-slate-700 flex-wrap">
@@ -1472,40 +1987,230 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
               })}
             </div>
           </div>
+
+          {/* SECTION: TREND CONSUMO E GRAMMATURE DOSIMETRO */}
+          <div className="bg-white rounded-lg p-[10px] border border-slate-200 shadow-sm space-y-[12px]">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-[8px] pb-[8px] border-b border-slate-100">
+              <div className="flex items-center gap-[8px]">
+                <div className="p-[8px] rounded-lg bg-[#f37021]/10 text-[#f37021]">
+                  <Scale className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-[#191970] text-base">
+                    Trend Consumo e Storico Grammature (Dosimetro)
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Analisi delle quantità in grammi assegnate ai membri della famiglia nel tempo.
+                  </p>
+                </div>
+              </div>
+
+              {/* Member Filter or Search */}
+              <div className="flex items-center gap-[6px] w-full sm:w-auto">
+                <div className="relative flex-1 sm:w-48">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2 top-2.5" />
+                  <input
+                    type="text"
+                    placeholder="Cerca piatto o note..."
+                    value={dosimetroSearchTerm}
+                    onChange={(e) => setDosimetroSearchTerm(e.target.value)}
+                    className="w-full pl-7 pr-2 py-[4px] bg-slate-50 border border-slate-200 rounded-md text-xs focus:outline-none focus:ring-1 focus:ring-[#f37021]"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Overall Gram Stats Cards */}
+            {(() => {
+              const activeWeekSlots = weeklyMenu.filter((m) => (m.weekId || 'current') === activeWeekId);
+              const memberGramTotalsActiveWeek: Record<string, number> = {};
+              const memberGramTotalsHistory: Record<string, number> = {};
+              let totalGramsActiveWeek = 0;
+              let totalGramsHistory = 0;
+              let totalMealsWithDosage = 0;
+
+              weeklyMenu.forEach((slot) => {
+                if (slot.dosages) {
+                  let slotTotal = 0;
+                  Object.entries(slot.dosages).forEach(([member, grams]) => {
+                    const g = Number(grams) || 0;
+                    slotTotal += g;
+                    memberGramTotalsHistory[member] = (memberGramTotalsHistory[member] || 0) + g;
+                    if ((slot.weekId || 'current') === activeWeekId) {
+                      memberGramTotalsActiveWeek[member] = (memberGramTotalsActiveWeek[member] || 0) + g;
+                    }
+                  });
+                  totalGramsHistory += slotTotal;
+                  if ((slot.weekId || 'current') === activeWeekId) {
+                    totalGramsActiveWeek += slotTotal;
+                  }
+                  totalMealsWithDosage++;
+                }
+              });
+
+              const activeWeekMealCount = activeWeekSlots.filter((s) => s.dosages && Object.keys(s.dosages).length > 0).length;
+              const maxActiveGrams = Math.max(1, ...Object.values(memberGramTotalsActiveWeek));
+
+              return (
+                <div className="space-y-[12px]">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-[8px]">
+                    <div className="p-[8px] bg-amber-50/70 border border-amber-200 rounded-lg space-y-[2px]">
+                      <span className="text-[10px] font-bold text-amber-800 uppercase block">Grammi Totali Settimana</span>
+                      <div className="text-lg font-black text-[#d95d13] flex items-center gap-[4px]">
+                        <Scale className="w-4 h-4 text-[#f37021]" />
+                        {totalGramsActiveWeek.toLocaleString('it-IT')} g
+                      </div>
+                      <span className="text-[10px] text-slate-500 font-medium">In {activeWeekMealCount} pasti dosati</span>
+                    </div>
+
+                    <div className="p-[8px] bg-[#191970]/5 border border-[#191970]/15 rounded-lg space-y-[2px]">
+                      <span className="text-[10px] font-bold text-[#191970] uppercase block">Grammi Totali Storico</span>
+                      <div className="text-lg font-black text-[#191970] flex items-center gap-[4px]">
+                        <BarChart2 className="w-4 h-4 text-[#191970]" />
+                        {totalGramsHistory.toLocaleString('it-IT')} g
+                      </div>
+                      <span className="text-[10px] text-slate-500 font-medium">Totale menu registrati</span>
+                    </div>
+
+                    <div className="p-[8px] bg-emerald-50 border border-emerald-200 rounded-lg space-y-[2px]">
+                      <span className="text-[10px] font-bold text-emerald-800 uppercase block">Media Pasto Famiglia</span>
+                      <div className="text-lg font-black text-emerald-900 flex items-center gap-[4px]">
+                        <Flame className="w-4 h-4 text-emerald-600" />
+                        {totalMealsWithDosage > 0 ? Math.round(totalGramsHistory / totalMealsWithDosage) : 0} g / pasto
+                      </div>
+                      <span className="text-[10px] text-slate-500 font-medium">Media su tutti i pasti</span>
+                    </div>
+                  </div>
+
+                  {/* Breakdown per Membro della Famiglia (Settimana Attuale) */}
+                  <div className="p-[10px] bg-slate-50 border border-slate-200 rounded-lg space-y-[8px]">
+                    <h4 className="font-extrabold text-xs text-[#191970] flex items-center justify-between">
+                      <span className="flex items-center gap-[4px]">
+                        <Users className="w-4 h-4 text-[#f37021]" />
+                        Ripartizione Consumo per Membro (Settimana Attuale)
+                      </span>
+                      <span className="text-[10px] text-slate-500 font-semibold">Totale: {totalGramsActiveWeek}g</span>
+                    </h4>
+
+                    {Object.keys(memberGramTotalsActiveWeek).length === 0 ? (
+                      <p className="text-xs text-slate-400 italic p-[4px]">Nessuna dosatura registrata per la settimana selezionata. Assegna i grammi ai pasti con il Dosimetro!</p>
+                    ) : (
+                      <div className="space-y-[6px]">
+                        {Object.entries(memberGramTotalsActiveWeek).map(([member, grams]) => {
+                          const pct = Math.round((grams / maxActiveGrams) * 100);
+                          const sharePct = totalGramsActiveWeek > 0 ? Math.round((grams / totalGramsActiveWeek) * 100) : 0;
+                          return (
+                            <div key={member} className="space-y-[2px]">
+                              <div className="flex items-center justify-between text-xs font-bold">
+                                <span className="text-[#191970]">{member}</span>
+                                <span className="text-[#f37021] font-black">{grams} g <span className="text-slate-400 font-semibold text-[10px]">({sharePct}%)</span></span>
+                              </div>
+                              <div className="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden">
+                                <div
+                                  className="bg-gradient-to-r from-[#f37021] to-[#d95d13] h-full rounded-full transition-all duration-500"
+                                  style={{ width: `${pct}%` }}
+                                />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Tabella Dettagliata Pasti con Dosimetro */}
+                  <div className="space-y-[6px]">
+                    <h4 className="font-extrabold text-xs text-[#191970] flex items-center gap-[4px]">
+                      <UtensilsCrossed className="w-4 h-4 text-[#f37021]" />
+                      Storico Dettagliato Pasti e Quantità
+                    </h4>
+
+                    {(() => {
+                      const slotsWithDosagesOrNotes = weeklyMenu.filter((slot) => {
+                        const hasDosage = slot.dosages && Object.keys(slot.dosages).length > 0;
+                        const hasNotes = Boolean(slot.notes && slot.notes.trim());
+                        if (!hasDosage && !hasNotes) return false;
+
+                        if (dosimetroSearchTerm) {
+                          const q = dosimetroSearchTerm.toLowerCase();
+                          const matchName = slot.recipeName.toLowerCase().includes(q);
+                          const matchNote = (slot.notes || '').toLowerCase().includes(q);
+                          const matchMember = slot.dosages && Object.keys(slot.dosages).some((m) => m.toLowerCase().includes(q));
+                          return matchName || matchNote || matchMember;
+                        }
+                        return true;
+                      });
+
+                      if (slotsWithDosagesOrNotes.length === 0) {
+                        return (
+                          <div className="p-[10px] bg-slate-50 border border-slate-200 rounded-lg text-center text-xs text-slate-500 italic">
+                            Nessun pasto trovato con grammature o annotazioni. Assegna le dosi dal planner con il tasto "+".
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div className="bg-slate-50 border border-slate-200 rounded-lg overflow-hidden text-xs">
+                          <div className="divide-y divide-slate-200">
+                            {slotsWithDosagesOrNotes.map((slot) => {
+                              const isLunch = slot.mealType === 'lunch';
+                              return (
+                                <div key={slot.id} className="p-[8px] bg-white hover:bg-amber-50/30 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-[6px]">
+                                  <div className="space-y-[2px]">
+                                    <div className="flex items-center gap-[6px]">
+                                      <span className={`text-[10px] font-black px-[6px] py-[1px] rounded text-white ${isLunch ? 'bg-[#f37021]' : 'bg-[#191970]'}`}>
+                                        {slot.day} • {isLunch ? 'Pranzo' : 'Cena'}
+                                      </span>
+                                      <span className="font-extrabold text-[#191970] text-xs">{cleanRecipeName(slot.recipeName)}</span>
+                                    </div>
+                                    {slot.notes && (
+                                      <p className="text-[11px] text-slate-600 italic font-medium flex items-center gap-[3px]">
+                                        <Pencil className="w-3 h-3 text-[#f37021] shrink-0" />
+                                        Nota: {slot.notes}
+                                      </p>
+                                    )}
+                                  </div>
+
+                                  {slot.dosages && Object.keys(slot.dosages).length > 0 && (
+                                    <div className="flex items-center gap-[4px] flex-wrap">
+                                      {Object.entries(slot.dosages).map(([mem, gr]) => (
+                                        <span key={mem} className="bg-slate-100 border border-slate-200 text-slate-800 px-[6px] py-[2px] rounded text-[10px] font-bold">
+                                          {mem}: <strong className="text-[#f37021]">{gr}g</strong>
+                                        </span>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
         </div>
       )}
 
       {/* VIEW 4: RECIPE BOOK MANAGER */}
       {activeSubTab === 'recipeBook' && (
         <div className="space-y-[10px]">
-          {/* Dish Course Filter Tabs (Antipasti, Primi, Secondi, Contorni, Dolci) */}
+          {/* Dish Course Filter Tabs */}
           <div className="bg-white rounded-lg p-[5px] border border-slate-200 shadow-sm space-y-[5px]">
-            <div className="flex items-center justify-between text-xs text-slate-500 font-semibold pb-[2px]">
-              <span className="font-bold text-[#191970] uppercase tracking-wider text-[11px]">Portate</span>
+            <div className="flex items-center justify-end text-xs text-slate-500 font-semibold pb-[2px]">
               <span>Totale ricette salvate: <strong>{recipes.length}</strong></span>
             </div>
 
-            {/* Row 1: Tutti Button */}
-            <div>
-              <button
-                onClick={() => setSelectedCourseFilter('Tutti')}
-                className={`w-full p-[5px] rounded-md text-xs font-extrabold transition-all text-center ${
-                  selectedCourseFilter === 'Tutti'
-                    ? 'bg-[#191970] text-white shadow-xs'
-                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200'
-                }`}
-              >
-                Tutti
-              </button>
-            </div>
-
-            {/* Row 2: 5 Courses fitting exactly across mobile screen width */}
-            <div className="grid grid-cols-5 gap-[5px]">
-              {(['Antipasti', 'Primi', 'Secondi', 'Contorni', 'Dolci'] as const).map((c) => (
+            {/* Row 1: 6 Courses (including Tutti) on 1 line */}
+            <div className="grid grid-cols-6 gap-[3px] sm:gap-[5px] w-full">
+              {(['Tutti', 'Antipasti', 'Primi', 'Secondi', 'Contorni', 'Dolci'] as const).map((c) => (
                 <button
                   key={c}
                   onClick={() => setSelectedCourseFilter(c)}
-                  className={`p-[5px] px-[2px] sm:px-[5px] rounded-md text-[10px] sm:text-xs font-extrabold transition-all text-center truncate ${
+                  className={`py-[5px] px-[2px] sm:px-[5px] rounded-md text-[10px] sm:text-xs font-extrabold transition-all text-center truncate flex items-center justify-center ${
                     selectedCourseFilter === c
                       ? 'bg-[#191970] text-white shadow-xs'
                       : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200'
@@ -1516,17 +2221,16 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
               ))}
             </div>
 
-            {/* Sub-filter by Tradition/Category */}
-            <div className="flex items-center gap-[5px] pt-[2px] text-xs">
-              <span className="font-bold text-slate-500">Tradizione:</span>
+            {/* Row 2: 5 Categories on 1 line */}
+            <div className="grid grid-cols-5 gap-[3px] sm:gap-[5px] w-full pt-[1px]">
               {(['Tutte', 'Sabina', 'Lazio', 'Classica', 'Altro'] as const).map((cat) => (
                 <button
                   key={cat}
                   onClick={() => setSelectedCategory(cat)}
-                  className={`px-[6px] py-[2px] rounded-md text-[11px] font-bold transition-colors ${
+                  className={`py-[4px] px-[2px] sm:px-[5px] rounded-md text-[10px] sm:text-xs font-bold transition-colors text-center truncate flex items-center justify-center ${
                     selectedCategory === cat
-                      ? 'bg-[#f37021]/15 text-[#d95d13] border border-[#f37021]/40'
-                      : 'text-slate-600 hover:bg-slate-100'
+                      ? 'bg-[#f37021] text-white shadow-xs'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200 border border-slate-200'
                   }`}
                 >
                   {cat}
@@ -1717,7 +2421,7 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
                         </div>
 
                         <h3 className="font-extrabold text-[#191970] text-base mb-[3px]">
-                          {recipe.name}
+                          {cleanRecipeName(recipe.name)}
                         </h3>
 
                         {/* Nutrition pill badge */}

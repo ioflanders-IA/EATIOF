@@ -28,10 +28,10 @@ export interface ActiveUserSession {
 
 // Valori predefiniti per la famiglia
 export const defaultFamilyMembers: FamilyMember[] = [
-  { id: 'member-1', name: 'Andrea (Io)', role: 'Planner', email: 'andblasi@gmail.com', hasPassword: true },
-  { id: 'member-2', name: 'Madre', role: 'Chef', email: 'madre@eatiof.local', hasPassword: true },
-  { id: 'member-3', name: 'Padre', role: 'Shopper', email: 'padre@eatiof.local', hasPassword: true },
-  { id: 'member-4', name: 'Commensale 4', role: 'Commensale', email: 'commensale@eatiof.local', hasPassword: false }
+  { id: 'member-1', name: 'Andrea (Io)', role: 'Planner', gender: 'M', age: 35, email: 'andblasi@gmail.com', hasPassword: true },
+  { id: 'member-2', name: 'Madre', role: 'Chef', gender: 'F', age: 60, email: 'madre@eatiof.local', hasPassword: true },
+  { id: 'member-3', name: 'Padre', role: 'Shopper', gender: 'M', age: 65, email: 'padre@eatiof.local', hasPassword: true },
+  { id: 'member-4', name: 'Commensale 4', role: 'Commensale', gender: 'M', age: 25, email: 'commensale@eatiof.local', hasPassword: false }
 ];
 
 export const defaultFamilyConfig: FamilyConfig = {
@@ -191,7 +191,7 @@ export async function getFamilyConfig(): Promise<FamilyConfig> {
     const docRef = doc(db, FAMILY_CONFIG_COLLECTION, CONFIG_DOC_ID);
     const getDocPromise = getDoc(docRef);
     const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('Timeout Firestore getDoc')), 5000)
+      setTimeout(() => reject(new Error('Timeout Firestore getDoc')), 1500)
     );
 
     const docSnap = await Promise.race([getDocPromise, timeoutPromise]);
@@ -217,17 +217,15 @@ export async function saveFamilyConfig(config: FamilyConfig): Promise<void> {
   window.dispatchEvent(new CustomEvent(FAMILY_CONFIG_CHANGED_EVENT, { detail: verifiedConfig }));
 
   if (db) {
-    try {
-      const docRef = doc(db, FAMILY_CONFIG_COLLECTION, CONFIG_DOC_ID);
-      const setDocPromise = setDoc(docRef, verifiedConfig, { merge: true });
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Timeout Firestore save')), 5000)
-      );
-      await Promise.race([setDocPromise, timeoutPromise]);
-      console.log('✅ Configurazione profili familiari salvata su Firestore!');
-    } catch (err) {
-      console.warn('⚠️ Salvato in locale (Firestore warning/timeout):', err);
-    }
+    // Sincronizzazione in background verso Firestore senza bloccare l'interfaccia o generare timeout visibili
+    const docRef = doc(db, FAMILY_CONFIG_COLLECTION, CONFIG_DOC_ID);
+    setDoc(docRef, verifiedConfig, { merge: true })
+      .then(() => {
+        console.log('✅ Configurazione profili familiari sincronizzata su Firestore!');
+      })
+      .catch((err) => {
+        console.log('💾 Configurazione salvata in locale (sincronizzazione cloud in corso o offline):', err?.message || err);
+      });
   }
 }
 

@@ -115,7 +115,7 @@ export const INITIAL_RECIPES: Recipe[] = [
   },
   {
     id: 'recipe-5',
-    name: 'Stracciatella alla romana (zuppa)',
+    name: 'Stracciatella alla romana',
     category: 'Lazio',
     course: 'Primi',
     prepTimeMinutes: 15,
@@ -150,7 +150,7 @@ export const INITIAL_RECIPES: Recipe[] = [
   },
   {
     id: 'recipe-7',
-    name: 'Pasta al pomodoro (Classica)',
+    name: 'Pasta al pomodoro',
     category: 'Classica',
     course: 'Primi',
     prepTimeMinutes: 15,
@@ -167,7 +167,7 @@ export const INITIAL_RECIPES: Recipe[] = [
   },
   {
     id: 'recipe-8',
-    name: 'Petto di pollo ai ferri con insalata (Classica)',
+    name: 'Petto di pollo ai ferri con insalata',
     category: 'Classica',
     course: 'Secondi',
     prepTimeMinutes: 15,
@@ -249,15 +249,15 @@ export const DAYS_OF_WEEK: DayOfWeek[] = [
 
 export const INITIAL_WEEKLY_MENU: WeeklyMenuItem[] = [
   { id: 'menu-1', day: 'Lunedì', mealType: 'lunch', recipeId: 'recipe-1', recipeName: 'Fregnacce alla sabina' },
-  { id: 'menu-2', day: 'Lunedì', mealType: 'dinner', recipeId: 'recipe-8', recipeName: 'Petto di pollo ai ferri con insalata (Classica)' },
+  { id: 'menu-2', day: 'Lunedì', mealType: 'dinner', recipeId: 'recipe-8', recipeName: 'Petto di pollo ai ferri con insalata' },
   { id: 'menu-3', day: 'Martedì', mealType: 'lunch', recipeId: 'recipe-6', recipeName: 'Carbonara' },
-  { id: 'menu-4', day: 'Martedì', mealType: 'dinner', recipeId: 'recipe-5', recipeName: 'Stracciatella alla romana (zuppa)' },
+  { id: 'menu-4', day: 'Martedì', mealType: 'dinner', recipeId: 'recipe-5', recipeName: 'Stracciatella alla romana' },
   { id: 'menu-5', day: 'Mercoledì', mealType: 'lunch', recipeId: 'recipe-2', recipeName: "Spaghetti all'Amatriciana" },
   { id: 'menu-6', day: 'Mercoledì', mealType: 'dinner', recipeId: 'recipe-3', recipeName: 'Pollo alla romana con i peperoni' },
-  { id: 'menu-7', day: 'Giovedì', mealType: 'lunch', recipeId: 'recipe-7', recipeName: 'Pasta al pomodoro (Classica)' },
+  { id: 'menu-7', day: 'Giovedì', mealType: 'lunch', recipeId: 'recipe-7', recipeName: 'Pasta al pomodoro' },
   { id: 'menu-8', day: 'Giovedì', mealType: 'dinner', recipeId: 'recipe-4', recipeName: 'Abbacchio a scottadito' },
   { id: 'menu-9', day: 'Venerdì', mealType: 'lunch', recipeId: 'recipe-1', recipeName: 'Fregnacce alla sabina' },
-  { id: 'menu-10', day: 'Venerdì', mealType: 'dinner', recipeId: 'recipe-8', recipeName: 'Petto di pollo ai ferri con insalata (Classica)' },
+  { id: 'menu-10', day: 'Venerdì', mealType: 'dinner', recipeId: 'recipe-8', recipeName: 'Petto di pollo ai ferri con insalata' },
   { id: 'menu-11', day: 'Sabato', mealType: 'lunch', recipeId: 'recipe-2', recipeName: "Spaghetti all'Amatriciana" },
   { id: 'menu-12', day: 'Sabato', mealType: 'dinner', recipeId: 'recipe-3', recipeName: 'Pollo alla romana con i peperoni' },
   { id: 'menu-13', day: 'Domenica', mealType: 'lunch', recipeId: 'recipe-6', recipeName: 'Carbonara' },

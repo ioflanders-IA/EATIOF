@@ -1,6 +1,5 @@
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { getFirestore, Firestore } from 'firebase/firestore';
-import { getDatabase, Database } from 'firebase/database';
 import { getAuth, Auth, GoogleAuthProvider, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import firebaseConfigJson from '../../firebase-applet-config.json';
 
@@ -10,7 +9,6 @@ const metaEnv = (import.meta as any).env || {};
 const firebaseConfig = {
   apiKey: metaEnv.VITE_FIREBASE_API_KEY || firebaseConfigJson.apiKey || 'AIzaSyDqFuzRTjjlFi4Brl36yEt5T51uUf5Of34',
   authDomain: metaEnv.VITE_FIREBASE_AUTH_DOMAIN || firebaseConfigJson.authDomain || 'eatiof.firebaseapp.com',
-  databaseURL: metaEnv.VITE_FIREBASE_DATABASE_URL || (firebaseConfigJson as any).databaseURL || 'https://eatiof-default-rtdb.firebaseio.com',
   projectId: metaEnv.VITE_FIREBASE_PROJECT_ID || firebaseConfigJson.projectId || 'eatiof',
   storageBucket: metaEnv.VITE_FIREBASE_STORAGE_BUCKET || firebaseConfigJson.storageBucket || 'eatiof.firebasestorage.app',
   messagingSenderId: metaEnv.VITE_FIREBASE_MESSAGING_SENDER_ID || firebaseConfigJson.messagingSenderId || '1098152315777',
@@ -19,7 +17,7 @@ const firebaseConfig = {
 
 let app: FirebaseApp | null = null;
 let db: Firestore | null = null;
-let rtdb: Database | null = null;
+const rtdb = null; // Disattivato RTDB per utilizzare Firestore come unico database per la sincronizzazione multi-browser
 let auth: Auth | null = null;
 const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({
@@ -32,7 +30,7 @@ if (firebaseConfig.apiKey && firebaseConfig.projectId && firebaseConfig.apiKey !
   try {
     app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
-    // 1. Initialize Firestore
+    // Initialize Firestore
     const dbId = metaEnv.VITE_FIREBASE_DATABASE_ID || (firebaseConfigJson as any).firestoreDatabaseId;
     if (dbId && dbId !== '(default)') {
       try {
@@ -47,22 +45,12 @@ if (firebaseConfig.apiKey && firebaseConfig.projectId && firebaseConfig.apiKey !
       console.log('🔥 Firestore connesso al database (default)');
     }
 
-    // 2. Initialize Realtime Database
-    if (firebaseConfig.databaseURL) {
-      try {
-        rtdb = getDatabase(app);
-        console.log('🔥 Realtime Database connesso con successo:', firebaseConfig.databaseURL);
-      } catch (e) {
-        console.warn('⚠️ Impossibile connettere Realtime Database:', e);
-      }
-    }
-
     auth = getAuth(app);
     setPersistence(auth, browserLocalPersistence).catch((err) => {
       console.warn('Persistence configuration warning:', err);
     });
     isFirebaseConfigured = true;
-    console.log('🔥 Firebase (Firestore / Realtime DB / Auth) pronto per il progetto:', firebaseConfig.projectId);
+    console.log('🔥 Firebase Firestore & Auth pronti per il progetto:', firebaseConfig.projectId);
   } catch (error) {
     console.warn('⚠️ Impossibile inizializzare Firebase, utilizzo LocalStorage Fallback:', error);
   }

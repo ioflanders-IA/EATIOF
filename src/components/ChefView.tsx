@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Recipe, WeeklyMenuItem, DayOfWeek } from '../types';
 import { DAYS_OF_WEEK } from '../data/initialData';
 import { ChefHat, Clock, Utensils, ChevronRight, Check, Sun, Moon } from 'lucide-react';
+import { cleanRecipeName } from '../lib/dataService';
 
 interface ChefViewProps {
   recipes: Recipe[];
@@ -103,7 +104,7 @@ export const ChefView: React.FC<ChefViewProps> = ({
                     <div className="p-[2px]">
                       <div className="flex items-center gap-2">
                         <h4 className="text-lg font-black text-[#191970] leading-tight">
-                          {lunchRecipe.name}
+                          {cleanRecipeName(lunchRecipe.name)}
                         </h4>
                         <span className="text-[10px] font-bold px-[5px] py-[2px] rounded-full bg-[#f37021]/10 text-[#f37021] border border-[#f37021]/20">
                           {lunchRecipe.category}
@@ -217,7 +218,7 @@ export const ChefView: React.FC<ChefViewProps> = ({
                     <div className="p-[2px]">
                       <div className="flex items-center gap-2">
                         <h4 className="text-lg font-black text-[#191970] leading-tight">
-                          {dinnerRecipe.name}
+                          {cleanRecipeName(dinnerRecipe.name)}
                         </h4>
                         <span className="text-[10px] font-bold px-[5px] py-[2px] rounded-full bg-[#191970]/10 text-[#191970] border border-[#191970]/20">
                           {dinnerRecipe.category}

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { BookOpen, Calendar, Refrigerator, Menu, Settings, Users, BarChart3, LogOut, X } from 'lucide-react';
+import { BookOpen, Calendar, Refrigerator, ShoppingCart, Menu, Settings, Users, BarChart3, LogOut, X } from 'lucide-react';
 import { MainNavTab } from './Header';
 
 interface BottomMainbarProps {
@@ -22,7 +22,7 @@ export const BottomMainbar: React.FC<BottomMainbarProps> = ({
   return (
     <>
       <nav className="fixed bottom-0 left-0 right-0 z-50 bg-[#191970] text-white border-t border-[#0d0d40] shadow-2xl md:hidden">
-        <div className="grid grid-cols-4 h-16 max-w-lg mx-auto px-1">
+        <div className="grid grid-cols-5 h-16 max-w-lg mx-auto px-1">
           {/* 1. RICETTE */}
           <button
             onClick={() => { onSelectTab('recipes'); setIsMenuOpen(false); }}
@@ -65,7 +65,28 @@ export const BottomMainbar: React.FC<BottomMainbarProps> = ({
             </span>
           </button>
 
-          {/* 3. FRIGO DISPENSA */}
+          {/* 3. SPESE */}
+          <button
+            onClick={() => { onSelectTab('shopper'); setIsMenuOpen(false); }}
+            className={`relative flex flex-col items-center justify-center h-full transition-all duration-200 ${
+              activeTab === 'shopper'
+                ? 'text-white font-extrabold'
+                : 'text-slate-300 hover:text-white opacity-80 hover:opacity-100'
+            }`}
+          >
+            <div
+              className={`transition-transform duration-200 ${
+                activeTab === 'shopper' ? 'text-amber-400 scale-110' : 'text-slate-300'
+              }`}
+            >
+              <ShoppingCart className="w-5 h-5" />
+            </div>
+            <span className="text-[10px] tracking-tight mt-1 truncate max-w-full font-medium">
+              Spese
+            </span>
+          </button>
+
+          {/* 4. DISPENSA */}
           <button
             onClick={() => { onSelectTab('pantry'); setIsMenuOpen(false); }}
             className={`relative flex flex-col items-center justify-center h-full transition-all duration-200 ${
@@ -82,7 +103,7 @@ export const BottomMainbar: React.FC<BottomMainbarProps> = ({
               <Refrigerator className="w-5 h-5" />
             </div>
             <span className="text-[10px] tracking-tight mt-1 truncate max-w-full font-medium">
-              Frigo
+              Dispensa
             </span>
           </button>
 

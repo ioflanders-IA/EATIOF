@@ -7,11 +7,8 @@ import {
   Trash2,
   Edit2,
   Search,
-  Sparkles,
-  PackageCheck,
   Calendar,
   AlertCircle,
-  Grid,
   Archive,
   Snowflake,
   Leaf
@@ -142,64 +139,59 @@ export const PantryView: React.FC<PantryViewProps> = ({
     return matchesCategory && matchesSearch;
   });
 
-  const frigoCount = pantryItems.filter((i) => cleanCategory(i.category) === 'Frigo').length;
-  const dispensaCount = pantryItems.filter((i) => cleanCategory(i.category) === 'Dispensa').length;
-
   return (
-    <div className="space-y-[10px]">
-      {/* Banner Frigorifero & Dispensa */}
-      <div className="bg-gradient-to-r from-[#10b981] to-[#047857] rounded-lg p-[12px] text-white shadow-md">
-        <div className="flex items-center justify-between gap-[10px]">
-          <div>
-            <div className="mb-[2px]">
-              <span className="text-[11px] font-extrabold uppercase tracking-wider text-emerald-100">
-                Giacenze
-              </span>
-            </div>
-            <h2 className="text-xl sm:text-2xl font-extrabold tracking-tight text-white">
-              Frigorifero & Dispensa
-            </h2>
-          </div>
-
-          <div className="flex items-center gap-[4px] shrink-0">
-            <button
-              onClick={handleAutoCrossCheck}
-              className="p-[6px] text-white hover:text-emerald-200 active:scale-90 transition-all"
-              title="Confronta con Spesa"
-            >
-              <Sparkles className="w-5 h-5" />
-            </button>
-
-            <button
-              onClick={() => {
-                if (showAddForm) resetForm();
-                else setShowAddForm(true);
-              }}
-              className="p-[6px] text-white hover:text-emerald-200 active:scale-90 transition-all"
-              title={showAddForm ? 'Chiudi' : 'Nuovo Alimento'}
-            >
-              <Plus className="w-5 h-5" />
-            </button>
-          </div>
+    <div className="space-y-[5px] relative pb-[60px]">
+      {/* Top Bar: Categories + Search */}
+      <div className="bg-white rounded-lg p-[5px] border border-slate-200 shadow-sm space-y-[5px]">
+        {/* Row 1: Categories Bar */}
+        <div className="grid grid-cols-5 gap-[3px] w-full">
+          {(
+            [
+              { id: 'Tutti', label: 'Tutti', Icon: null },
+              { id: 'Frigo', label: 'Frigo', Icon: Refrigerator },
+              { id: 'Dispensa', label: 'Dispensa', Icon: Archive },
+              { id: 'Freezer', label: 'Freezer', Icon: Snowflake },
+              { id: 'Freschi', label: 'Freschi', Icon: Leaf }
+            ] as const
+          ).map(({ id, label, Icon }) => {
+            const isSelected = activeCategory === id;
+            return (
+              <button
+                key={id}
+                onClick={() => setActiveCategory(id as any)}
+                className={`py-[6px] px-[2px] rounded-md text-[10px] sm:text-[11px] font-bold transition-all flex items-center justify-center gap-[3px] w-full truncate ${
+                  isSelected
+                    ? 'bg-[#10b981] text-white shadow-sm'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                {id === 'Tutti' ? (
+                  <span
+                    className={`text-[10px] font-black shrink-0 ${
+                      isSelected ? 'text-white' : 'text-slate-700'
+                    }`}
+                  >
+                    {pantryItems.length}
+                  </span>
+                ) : (
+                  Icon && <Icon className="w-3.5 h-3.5 shrink-0" />
+                )}
+                <span className="truncate">{label}</span>
+              </button>
+            );
+          })}
         </div>
 
-        {/* Categories Bar & Quick Stats */}
-        <div className="mt-[10px] pt-[8px] border-t border-white/20 flex flex-wrap items-center justify-between gap-[8px]">
-          <div className="flex items-center gap-[12px] text-xs font-bold text-white/90">
-            <span>Totale: <strong className="text-white font-black">{pantryItems.length}</strong> alimenti</span>
-            <span>Frigo: <strong className="text-white font-black">{frigoCount}</strong></span>
-            <span>Dispensa: <strong className="text-white font-black">{dispensaCount}</strong></span>
-          </div>
-
-          {onNavigateToShopper && (
-            <button
-              onClick={onNavigateToShopper}
-              className="text-xs font-bold text-emerald-100 underline hover:text-white flex items-center gap-[4px]"
-            >
-              <PackageCheck className="w-3.5 h-3.5" />
-              <span>Vai alla Lista Spesa</span>
-            </button>
-          )}
+        {/* Row 2: Search Input */}
+        <div className="relative w-full">
+          <Search className="w-4 h-4 text-slate-400 absolute left-[8px] top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            placeholder="Cerca alimento in frigo/dispensa..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-[28px] pr-[10px] py-[5px] bg-slate-50 border border-slate-200 rounded-md text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#10b981]"
+          />
         </div>
       </div>
 
@@ -337,50 +329,6 @@ export const PantryView: React.FC<PantryViewProps> = ({
         </form>
       )}
 
-      {/* Filter Tabs & Search Bar */}
-      <div className="bg-white rounded-lg p-[8px] border border-slate-200 shadow-sm space-y-[8px]">
-        {/* Category Filter Pills - Always on one single line adapted to screen width with Lucide icons */}
-        <div className="grid grid-cols-5 gap-[4px] w-full">
-          {(
-            [
-              { id: 'Tutti', label: 'Tutti', Icon: Grid },
-              { id: 'Frigo', label: 'Frigo', Icon: Refrigerator },
-              { id: 'Dispensa', label: 'Dispensa', Icon: Archive },
-              { id: 'Freezer', label: 'Freezer', Icon: Snowflake },
-              { id: 'Freschi', label: 'Freschi', Icon: Leaf }
-            ] as const
-          ).map(({ id, label, Icon }) => {
-            const isSelected = activeCategory === id;
-            return (
-              <button
-                key={id}
-                onClick={() => setActiveCategory(id as any)}
-                className={`py-[6px] px-[2px] rounded-md text-[11px] font-bold transition-all flex items-center justify-center gap-[3px] w-full truncate ${
-                  isSelected
-                    ? 'bg-[#10b981] text-white shadow-sm'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
-              >
-                <Icon className="w-3.5 h-3.5 shrink-0" />
-                <span className="truncate">{label}</span>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Search Input */}
-        <div className="relative w-full">
-          <Search className="w-4 h-4 text-slate-400 absolute left-[8px] top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            placeholder="Cerca alimento in frigo/dispensa..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-[28px] pr-[10px] py-[5px] bg-slate-50 border border-slate-200 rounded-md text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#10b981]"
-          />
-        </div>
-      </div>
-
       {/* Pantry List Items - 2 items per row, 5px gap */}
       {filteredItems.length === 0 ? (
         <div className="bg-white rounded-lg border border-slate-200 p-[20px] text-center text-slate-500 space-y-[6px]">
@@ -399,7 +347,7 @@ export const PantryView: React.FC<PantryViewProps> = ({
             return (
               <div
                 key={item.id}
-                className={`bg-white rounded-lg ${borderClass} p-[8px] sm:p-[10px] shadow-sm flex flex-col justify-between hover:shadow-md transition-all space-y-[8px] min-w-0`}
+                className={`bg-white rounded-lg ${borderClass} p-[5px] shadow-sm flex flex-col justify-between hover:shadow-md transition-all space-y-[5px] min-w-0`}
               >
                 {/* Header info */}
                 <div className="min-w-0 space-y-[2px]">
@@ -475,7 +423,23 @@ export const PantryView: React.FC<PantryViewProps> = ({
           })}
         </div>
       )}
+
+      {/* Floating Action Button in bottom right area */}
+      <div className="fixed bottom-[72px] right-[14px] z-30 flex items-center gap-[5px] pointer-events-auto">
+        <button
+          onClick={() => {
+            if (showAddForm) resetForm();
+            else setShowAddForm(true);
+          }}
+          className="bg-[#10b981] text-white shadow-xl hover:bg-[#047857] active:scale-95 transition-all rounded-full p-[9px] sm:px-[12px] sm:py-[7px] font-extrabold text-xs flex items-center gap-[5px] border border-white/30"
+          title={showAddForm ? 'Chiudi' : 'Nuovo Alimento'}
+        >
+          <Plus className="w-5 h-5 shrink-0" />
+          <span className="hidden sm:inline">{showAddForm ? 'Chiudi' : 'Nuovo Alimento'}</span>
+        </button>
+      </div>
     </div>
   );
 };
+
 

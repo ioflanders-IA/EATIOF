@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { BookOpen, Calendar, Refrigerator, Menu, Settings, Users, BarChart3, LogOut, User as UserIcon } from 'lucide-react';
+import { BookOpen, Calendar, Refrigerator, ShoppingCart, Menu, Settings, Users, BarChart3, LogOut, User as UserIcon } from 'lucide-react';
 import { EatiofLogo } from './EatiofLogo';
 import { User } from 'firebase/auth';
 import { ActiveUserSession } from '../lib/familyAuthService';
@@ -47,7 +47,7 @@ export const Header: React.FC<HeaderProps> = ({
   }, []);
 
   return (
-    <header className="sticky top-0 z-40 bg-[#191970] text-white border-b border-[#191970]/80 shadow-lg">
+    <header className="relative z-40 bg-[#191970] text-white border-b border-[#191970]/80 shadow-lg">
       <div className="max-w-4xl mx-auto p-[10px]">
         {/* Top Brand & User Bar */}
         <div className="flex items-center justify-between mb-0 md:mb-[8px] gap-2">
@@ -68,8 +68,8 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Mainbar Navigation (hidden on mobile, visible on desktop) */}
         <div className="hidden md:flex items-center justify-between gap-2 p-[4px] bg-[#0d0d40] rounded-xl border border-slate-700 relative">
-          {/* Main 3 Navigation Items */}
-          <div className="flex-1 grid grid-cols-3 gap-[5px]">
+          {/* Main 4 Navigation Items */}
+          <div className="flex-1 grid grid-cols-4 gap-[5px]">
             {/* 1. RICETTE */}
             <button
               id="main-nav-recipes"
@@ -98,7 +98,21 @@ export const Header: React.FC<HeaderProps> = ({
               <span className="truncate">Calendario</span>
             </button>
 
-            {/* 3. FRIGO DISPENSA */}
+            {/* 3. SPESE */}
+            <button
+              id="main-nav-shopper"
+              onClick={() => { onSelectTab('shopper'); setIsMenuOpen(false); }}
+              className={`flex items-center justify-center gap-[6px] p-[8px] rounded-lg text-xs font-bold transition-all duration-200 ${
+                activeTab === 'shopper'
+                  ? 'bg-amber-500 text-slate-950 shadow-md font-extrabold'
+                  : 'text-amber-300 hover:text-white hover:bg-amber-950/50'
+              }`}
+            >
+              <ShoppingCart className="w-4 h-4 text-amber-400 shrink-0" />
+              <span className="truncate">Spese</span>
+            </button>
+
+            {/* 4. DISPENSA */}
             <button
               id="main-nav-pantry"
               onClick={() => { onSelectTab('pantry'); setIsMenuOpen(false); }}
@@ -109,7 +123,7 @@ export const Header: React.FC<HeaderProps> = ({
               }`}
             >
               <Refrigerator className="w-4 h-4 text-emerald-400 shrink-0" />
-              <span className="truncate">Frigo & Dispensa</span>
+              <span className="truncate">Dispensa</span>
             </button>
           </div>
 

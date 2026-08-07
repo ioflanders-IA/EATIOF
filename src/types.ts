@@ -4,6 +4,8 @@ export interface FamilyMember {
   id: string;
   name: string;
   role: string;
+  gender?: 'M' | 'F' | 'Altro' | string;
+  age?: number | string;
   email?: string;
   password?: string;
   hasPassword?: boolean;
@@ -87,6 +89,8 @@ export interface WeeklyMenuItem {
   weekId?: string;
   date?: string;
   userId?: string;
+  notes?: string;
+  dosages?: Record<string, number>;
 }
 
 export interface ShoppingListItem {

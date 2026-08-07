@@ -67,7 +67,7 @@ export function generate5RecipesForSeasonalItem(
     // 2. PRIMO PIATTO
     {
       id: `generated-primo-${timestamp}-2`,
-      name: `Primo Piatto Tradizionale con ${cleanName} e Pecorino`,
+      name: `Pasta Tradizionale con ${cleanName} e Pecorino`,
       category: 'Lazio',
       course: 'Primi',
       prepTimeMinutes: 20,

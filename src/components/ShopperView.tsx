@@ -101,10 +101,10 @@ export const ShopperView: React.FC<ShopperViewProps> = ({
   const progressPercent = totalItems > 0 ? Math.round((completedCount / totalItems) * 100) : 0;
 
   return (
-    <div className="space-y-[10px]">
+    <div className="space-y-[5px]">
       {/* Top Banner */}
-      <div className="bg-[#191970] rounded-lg p-[10px] text-white shadow-md">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-[10px]">
+      <div className="bg-[#191970] rounded-lg p-[5px] text-white shadow-md">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-[5px]">
           <div>
             <div className="flex items-center gap-[5px] mb-[5px]">
               <span className="p-[5px] rounded-md bg-[#f37021]">
@@ -120,7 +120,7 @@ export const ShopperView: React.FC<ShopperViewProps> = ({
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-[6px]">
+          <div className="flex flex-wrap items-center gap-[5px]">
             <button
               onClick={handleAutoDeductPantry}
               className="p-[8px] px-[12px] rounded-md bg-[#10b981] hover:bg-[#047857] text-white font-extrabold text-xs shadow-md active:scale-95 transition-all flex items-center justify-center gap-[5px] shrink-0"
@@ -141,14 +141,14 @@ export const ShopperView: React.FC<ShopperViewProps> = ({
         </div>
 
         {pantryNotice && (
-          <div className="mt-[10px] p-[8px] px-[12px] bg-emerald-500/20 border border-emerald-400/50 rounded-md text-emerald-100 text-xs font-bold flex items-center justify-between">
+          <div className="mt-[5px] p-[5px] px-[12px] bg-emerald-500/20 border border-emerald-400/50 rounded-md text-emerald-100 text-xs font-bold flex items-center justify-between">
             <span>{pantryNotice}</span>
             <button onClick={() => setPantryNotice(null)} className="text-white hover:text-emerald-200 font-extrabold">×</button>
           </div>
         )}
 
         {/* Progress bar */}
-        <div className="mt-[10px] pt-[10px] border-t border-white/20">
+        <div className="mt-[5px] pt-[5px] border-t border-white/20">
           <div className="flex items-center justify-between text-xs font-bold mb-[5px]">
             <span>Avanzamento Spesa ({completedCount}/{totalItems})</span>
             <span className="text-[#f37021]">{progressPercent}% Completato</span>
@@ -166,7 +166,7 @@ export const ShopperView: React.FC<ShopperViewProps> = ({
       {showAddForm && (
         <form
           onSubmit={handleAddManualItem}
-          className="bg-white rounded-lg p-[10px] border-2 border-[#191970]/30 shadow-md space-y-[10px] animate-fade-in"
+          className="bg-white rounded-lg p-[5px] border-2 border-[#191970]/30 shadow-md space-y-[5px] animate-fade-in"
         >
           <h3 className="text-sm font-extrabold text-[#191970] flex items-center gap-[5px] p-[5px]">
             <Plus className="w-4 h-4 text-[#f37021]" />
@@ -230,7 +230,7 @@ export const ShopperView: React.FC<ShopperViewProps> = ({
       )}
 
       {/* Filter and Actions Toolbar */}
-      <div className="bg-white rounded-lg p-[10px] border border-slate-200 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-[10px]">
+      <div className="bg-white rounded-lg p-[5px] border border-slate-200 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-[5px]">
         {/* Search */}
         <div className="relative w-full sm:w-64 p-[5px]">
           <Search className="w-4 h-4 text-slate-400 absolute left-4 top-4" />
@@ -292,7 +292,7 @@ export const ShopperView: React.FC<ShopperViewProps> = ({
 
       {/* Shopping List Items Container */}
       {totalItems === 0 ? (
-        <div className="bg-white rounded-lg p-[10px] border border-slate-200 shadow-sm text-center space-y-[10px]">
+        <div className="bg-white rounded-lg p-[5px] border border-slate-200 shadow-sm text-center space-y-[5px]">
           <div className="w-12 h-12 mx-auto rounded-full bg-[#191970]/10 flex items-center justify-center text-[#191970] my-[5px]">
             <ShoppingBag className="w-6 h-6" />
           </div>
@@ -308,11 +308,11 @@ export const ShopperView: React.FC<ShopperViewProps> = ({
           </button>
         </div>
       ) : filteredItems.length === 0 ? (
-        <div className="bg-white rounded-lg p-[10px] border border-slate-200 shadow-sm text-center text-slate-500 text-xs font-semibold">
+        <div className="bg-white rounded-lg p-[5px] border border-slate-200 shadow-sm text-center text-slate-500 text-xs font-semibold">
           Nessun ingrediente corrisponde al filtro selezionato.
         </div>
       ) : (
-        <div className="space-y-[10px]">
+        <div className="space-y-[5px]">
           {filteredItems.map((item) => {
             const pantryMatch = pantryItems.find((p) => {
               const pName = p.name.toLowerCase().trim();
@@ -324,14 +324,14 @@ export const ShopperView: React.FC<ShopperViewProps> = ({
               <div
                 key={item.id}
                 onClick={() => handleToggle(item.id, item.isChecked)}
-                className={`group rounded-lg p-[10px] border transition-all cursor-pointer flex items-center justify-between gap-[10px] shadow-sm ${
+                className={`group rounded-lg p-[5px] border transition-all cursor-pointer flex items-center justify-between gap-[5px] shadow-sm ${
                   item.isChecked
                     ? 'bg-slate-100/80 border-slate-300 opacity-60'
                     : 'bg-white hover:bg-[#191970]/5 border-slate-200 hover:border-[#191970]'
                 }`}
               >
                 {/* Checkbox & Details */}
-                <div className="flex items-center gap-[10px] min-w-0 p-[5px]">
+                <div className="flex items-center gap-[5px] min-w-0 p-[5px]">
                   {/* BIG TOUCH CHECKBOX */}
                   <button
                     type="button"
